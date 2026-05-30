@@ -157,22 +157,25 @@ export function buildAuthFileCredentialRows(
 }
 
 export function buildAiProviderCredentialRows(identities: UsageIdentity[]): AiProviderCredentialRow[] {
-  return identities.map((identity) => ({
-    identity,
-    displayName: credentialDisplayName(identity),
-    maskedIdentity: identity.identity,
-    providerLabel: credentialProviderLabel(identity),
-    typeLabel: credentialTypeLabel(identity),
-    authTypeLabel: credentialAuthTypeLabel(identity),
-    totalRequests: safeNumber(identity.total_requests),
-    successCount: safeNumber(identity.success_count),
-    failureCount: safeNumber(identity.failure_count),
-    successRate: successRate(identity),
-    totalTokens: safeNumber(identity.total_tokens),
-    cacheRate: cacheRate(identity),
-    lastUsedText: identity.last_used_at,
-    statsUpdatedText: identity.stats_updated_at,
-  }))
+  return identities.map((identity, index) => {
+    const accountLabel = aiProviderAccountLabel(identity, index)
+    return {
+      identity,
+      displayName: accountLabel,
+      maskedIdentity: accountLabel,
+      providerLabel: '-',
+      typeLabel: '-',
+      authTypeLabel: '-',
+      totalRequests: safeNumber(identity.total_requests),
+      successCount: safeNumber(identity.success_count),
+      failureCount: safeNumber(identity.failure_count),
+      successRate: successRate(identity),
+      totalTokens: safeNumber(identity.total_tokens),
+      cacheRate: cacheRate(identity),
+      lastUsedText: identity.last_used_at,
+      statsUpdatedText: identity.stats_updated_at,
+    }
+  })
 }
 
 function toDisplayQuota(row: UsageQuotaRow): DisplayQuota {
@@ -310,6 +313,16 @@ function isSecondaryQuota(quota: DisplayQuota): boolean {
 
 function credentialDisplayName(identity: UsageIdentity): string {
   return firstNonEmpty(identity.displayName, identity.name, identity.identity) ?? '-'
+}
+
+function aiProviderAccountLabel(identity: UsageIdentity, index: number): string {
+  for (const value of [identity.displayName, identity.name, identity.identity]) {
+    const trimmed = value?.trim()
+    if (trimmed && /^AI account \d+$/.test(trimmed)) {
+      return trimmed
+    }
+  }
+  return `AI account ${index + 1}`
 }
 
 function credentialProviderLabel(identity: UsageIdentity): string {

@@ -55,7 +55,7 @@ describe('UsagePage toolbar styles', () => {
     expect(i18nSource).not.toContain("tab_analysis: 'API & Models'")
     expect(i18nSource).not.toContain("tab_analysis: 'API 与模型'")
     expect(i18nSource).not.toContain("tab_analysis: 'API 與模型'")
-    expect(usagePageSource).toContain("const USAGE_TAB_OPTIONS = ['overview', 'analysis', 'events'] as const")
+    expect(usagePageSource).toContain("const USAGE_TAB_OPTIONS = ['overview', 'analysis', 'events', 'ai-provider', 'model-info'] as const")
   })
 
   it('keeps login protection controls without restoring CPA management actions', () => {
@@ -104,11 +104,9 @@ describe('UsagePage toolbar styles', () => {
     expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeySettingsList\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);/)
     expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeySettingsItem\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/)
     expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeySettingsItem\s*\{[^}]*align-items:\s*stretch;/)
-    expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeyAliasField\s*\{[\s\S]*?width:\s*100%;/)
-    expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeyAliasField\s*\{[\s\S]*?:global\(\.form-group\)\s*\{[\s\S]*?width:\s*100%;/)
-    expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeyAliasField\s*\{[\s\S]*?:global\(\.form-group\)\s*\{[\s\S]*?min-width:\s*0;/)
-    expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeyAliasField\s*\{[\s\S]*?:global\(\.form-group\)\s*\{[\s\S]*?margin-bottom:\s*0;/)
-    expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeyAliasInput\s*\{[\s\S]*?max-width:\s*100%;/)
+    expect(usagePageStyles).not.toContain('apiKeyAlias')
+    expect(usagePageStyles).not.toContain('apiKeySettingsForm')
+    expect(usagePageStyles).not.toContain('apiKeySettingsSaveButton')
   })
 
   it('keeps Model Pricing Settings list viewport aligned with API Key Settings without shrinking it behind the form', () => {
@@ -271,7 +269,8 @@ describe('UsagePage toolbar styles', () => {
     expect(analysisPanelSource).toContain('className={`${styles.heatmapRowLabel} ${styles.heatmapTooltipTarget}`}')
     expect(analysisPanelSource).toContain('className={styles.heatmapTruncatedLabel}')
     expect(analysisPanelSource).toContain('data-full-name={model}')
-    expect(analysisPanelSource).toContain('data-full-name={apiKey}')
+    expect(analysisPanelSource).toContain('data-full-name={safeApiKeyLabels.get(apiKey) ??')
+    expect(analysisPanelSource).not.toContain('data-full-name={apiKey}')
     expect(analysisPanelSource).toContain('background: getHeatmapCellGradient(intensity)')
     expect(analysisPanelSource).toContain('color: getHeatmapCellTextColor(intensity)')
     expect(analysisPanelSource).toContain('const getHeatmapVisualIntensity = (value: number, maxValue: number)')

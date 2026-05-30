@@ -77,6 +77,11 @@ func TestUsageAnalysisReturnsAggregatedRows(t *testing.T) {
 			TotalTokens: 42,
 			Requests:    2,
 		}},
+		APIKeyCostComposition: []servicedto.AnalysisCostCompositionItem{{
+			Key:      "sk-provider123456",
+			Cost:     0.0042,
+			Requests: 2,
+		}},
 		ModelComposition: []servicedto.AnalysisCompositionItem{{
 			Key:         "claude-sonnet",
 			TotalTokens: 42,
@@ -90,7 +95,7 @@ func TestUsageAnalysisReturnsAggregatedRows(t *testing.T) {
 		}},
 		AIProviderComposition: []servicedto.AnalysisCompositionItem{{
 			Key:         "provider-1",
-			Label:       "Provider One",
+			Label:       "AI account 1",
 			TotalTokens: 12,
 			Requests:    1,
 		}},
@@ -114,17 +119,20 @@ func TestUsageAnalysisReturnsAggregatedRows(t *testing.T) {
 	if !contains(body, `"granularity":"hourly"`) || !contains(body, `"token_usage":[`) || !contains(body, `"heatmap":`) {
 		t.Fatalf("unexpected response body: %s", body)
 	}
-	if !contains(body, `"api_key_composition":[`) || !contains(body, `"model_composition":[`) || !contains(body, `"auth_files_composition":[`) || !contains(body, `"ai_provider_composition":[`) {
+	if !contains(body, `"api_key_composition":[`) || !contains(body, `"api_key_cost_composition":[`) || !contains(body, `"model_composition":[`) || !contains(body, `"auth_files_composition":[`) || !contains(body, `"ai_provider_composition":[`) {
 		t.Fatalf("expected composition payloads in response body: %s", body)
 	}
-	if !contains(body, `"key":"sk-*********123456"`) || !contains(body, `"label":"sk-*********123456"`) {
+	if !contains(body, `"key":"sk-p*****************3456"`) || !contains(body, `"label":"sk-p*****************3456"`) {
 		t.Fatalf("expected redacted api key composition in response body: %s", body)
 	}
 	if !contains(body, `"key":"aut*********file-1"`) || !contains(body, `"label":"Auth File One"`) || !contains(body, `"percent":100`) {
 		t.Fatalf("expected auth file composition in response body: %s", body)
 	}
-	if !contains(body, `"key":"pro*********ider-1"`) || !contains(body, `"label":"Provider One"`) {
-		t.Fatalf("expected ai provider composition in response body: %s", body)
+	if !contains(body, `"key":"pro*********ider-1"`) || !contains(body, `"label":"AI account 1"`) || contains(body, "Provider One") || contains(body, "codex account") || contains(body, "openai account") || contains(body, "claude account") {
+		t.Fatalf("expected anonymized ai provider composition in response body: %s", body)
+	}
+	if !contains(body, `"cost":0.0042`) || !contains(body, `"cost_percent":100`) {
+		t.Fatalf("expected api key cost composition in response body: %s", body)
 	}
 	if !contains(body, `"model":"claude-sonnet"`) || !contains(body, `"intensity":1`) {
 		t.Fatalf("expected heatmap cell in response body: %s", body)
@@ -140,7 +148,7 @@ func TestUsageAnalysisReturnsAggregatedRows(t *testing.T) {
 	}
 }
 
-func TestUsageAnalysisUsesCPAAPIKeyOptionLabels(t *testing.T) {
+func TestUsageAnalysisUsesMaskedCPAAPIKeysInsteadOfAliases(t *testing.T) {
 	bucket := time.Date(2026, 4, 22, 10, 0, 0, 0, time.Local)
 	lastSyncedAt := time.Date(2026, 5, 13, 10, 0, 0, 0, time.Local)
 	provider := &usageAnalysisStub{analysis: &servicedto.AnalysisSnapshot{
@@ -175,11 +183,11 @@ func TestUsageAnalysisUsesCPAAPIKeyOptionLabels(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", resp.Code)
 	}
 	body := resp.Body.String()
-	if !contains(body, `"key":"1"`) || !contains(body, `"label":"Primary Key"`) || !contains(body, `"api_key":"Primary Key"`) {
-		t.Fatalf("expected analysis payload to use CPA API key id and display label, got %s", body)
+	if !contains(body, `"key":"1"`) || !contains(body, `"label":"sk-a*****************3456"`) || !contains(body, `"api_key":"sk-a*****************3456"`) {
+		t.Fatalf("expected analysis payload to use CPA API key id and masked key label, got %s", body)
 	}
-	if contains(body, "sk-alpha123456") {
-		t.Fatalf("expected raw key value to stay hidden when a CPA key label exists, got %s", body)
+	if contains(body, "Primary Key") || contains(body, "sk-alpha123456") || contains(body, "sk-*********123456") {
+		t.Fatalf("expected alias, raw key, and stale masks to stay hidden, got %s", body)
 	}
 	if provider.lastFilter.APIKeyID != "1" {
 		t.Fatalf("expected API key id to pass into usage filter, got %+v", provider.lastFilter)
@@ -193,7 +201,7 @@ func TestBuildAnalysisHeatmapPayloadSortsKeysByRequests(t *testing.T) {
 		{APIKey: "sk-high654321", Model: "model-low", Requests: 2, TotalTokens: 20},
 	}, nil)
 
-	if got := payload.APIKeys; len(got) != 2 || got[0] != helper.RedactSensitiveValue("sk-high654321") || got[1] != helper.RedactSensitiveValue("sk-low123456") {
+	if got := payload.APIKeys; len(got) != 2 || got[0] != helper.MaskAPIKeyForDisplay("sk-high654321") || got[1] != helper.MaskAPIKeyForDisplay("sk-low123456") {
 		t.Fatalf("expected api keys sorted by total requests desc, got %+v", got)
 	}
 	if got := payload.Models; len(got) != 2 || got[0] != "model-high" || got[1] != "model-low" {

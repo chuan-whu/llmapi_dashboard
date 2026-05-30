@@ -93,10 +93,10 @@ func TestUsageEventsReturnsFilteredRows(t *testing.T) {
 	if !contains(body, `"id":"42"`) || !contains(body, `"total_count":1`) || !contains(body, `"page":1`) || !contains(body, `"page_size":100`) || !contains(body, `"total_pages":1`) {
 		t.Fatalf("expected pagination metadata and event id in response body: %s", body)
 	}
-	if !contains(body, `"source":"OpenAI Mirror"`) {
+	if !contains(body, `"source":"AI account 1"`) {
 		t.Fatalf("expected resolved source display in response body: %s", body)
 	}
-	if contains(body, `sk-provider-key`) || contains(body, `sk-provider-prefix`) {
+	if contains(body, `openai account`) || contains(body, `codex account`) || contains(body, `claude account`) || contains(body, `OpenAI Mirror`) || contains(body, `sk-provider-key`) || contains(body, `sk-provider-prefix`) {
 		t.Fatalf("expected raw source values to be redacted from response body: %s", body)
 	}
 	if contains(body, `"source_type"`) || contains(body, `"source_key"`) {
@@ -164,7 +164,7 @@ func TestUsageEventsResponseDoesNotExposeSourceKey(t *testing.T) {
 	}
 }
 
-func TestUsageEventsResolvesCPAAPIKeyAliasFromGroupKey(t *testing.T) {
+func TestUsageEventsIgnoresCPAAPIKeyAliasFromGroupKey(t *testing.T) {
 	provider := &usageEventsStub{events: []servicedto.UsageEventRecord{{
 		ID:          49,
 		Timestamp:   time.Date(2026, 4, 22, 11, 0, 0, 0, time.UTC),
@@ -189,11 +189,11 @@ func TestUsageEventsResolvesCPAAPIKeyAliasFromGroupKey(t *testing.T) {
 	if resp.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", resp.Code, body)
 	}
-	if !contains(body, `"api_key":"Production Key"`) {
-		t.Fatalf("expected API key alias in response body: %s", body)
+	if !contains(body, `"api_key":"sk-a*****************3456"`) {
+		t.Fatalf("expected masked API key in response body: %s", body)
 	}
-	if contains(body, `sk-alpha123456`) || contains(body, `sk-*********123456`) {
-		t.Fatalf("expected raw and masked key to be hidden when alias exists, got %s", body)
+	if contains(body, `Production Key`) || contains(body, `sk-alpha123456`) || contains(body, `sk-*********123456`) {
+		t.Fatalf("expected raw key, alias, and stale masks to stay hidden, got %s", body)
 	}
 }
 
@@ -221,7 +221,7 @@ func TestUsageEventsFallsBackToMaskedCPAAPIKeyFromGroupKey(t *testing.T) {
 	if resp.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", resp.Code, body)
 	}
-	if !contains(body, `"api_key":"sk-*********654321"`) {
+	if !contains(body, `"api_key":"sk-b*****************4321"`) {
 		t.Fatalf("expected masked API key in response body: %s", body)
 	}
 	if contains(body, `sk-beta654321`) {
@@ -248,7 +248,7 @@ func TestUsageEventsFallsBackToCanonicalMaskedAPIKeyWhenGroupKeyIsUnmatched(t *t
 	if resp.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", resp.Code, body)
 	}
-	if !contains(body, `"api_key":"sk-*********maWyTA"`) {
+	if !contains(body, `"api_key":"sk-B*****************WyTA"`) {
 		t.Fatalf("expected canonical masked API key in response body: %s", body)
 	}
 	if contains(body, `sk-BabcdefghijklmnopqrstuvwxyzmaWyTA`) || contains(body, `sk-B***************************WyTA`) {
@@ -286,16 +286,16 @@ func TestUsageEventsResolvesAPIKeySourceFromProviderIdentity(t *testing.T) {
 	if resp.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", resp.Code, body)
 	}
-	if !contains(body, `"source":"Provider Name(Team Prefix)"`) {
-		t.Fatalf("expected source to use provider identity displayName, got %s", body)
+	if !contains(body, `"source":"AI account 1"`) {
+		t.Fatalf("expected source to use anonymized provider account label, got %s", body)
 	}
-	if !contains(body, `"source_type":"openai"`) {
-		t.Fatalf("expected source_type to use provider identity type, got %s", body)
+	if contains(body, `"source_type"`) {
+		t.Fatalf("expected source_type to stay omitted, got %s", body)
 	}
 	if contains(body, `"source_key"`) {
 		t.Fatalf("expected source_key to stay omitted, got %s", body)
 	}
-	if contains(body, `Fallback Provider`) || contains(body, `sk-provider-key`) {
+	if contains(body, `openai account`) || contains(body, `codex account`) || contains(body, `claude account`) || contains(body, `Provider Name`) || contains(body, `Team Prefix`) || contains(body, `Provider`) || contains(body, `Fallback Provider`) || contains(body, `sk-provider-key`) {
 		t.Fatalf("expected fallback and raw source to be hidden, got %s", body)
 	}
 }
@@ -333,7 +333,7 @@ func TestUsageEventsDoesNotResolveProviderIdentityFromSource(t *testing.T) {
 	if contains(body, `"source":"Provider Name(Team Prefix)"`) || contains(body, `"source_key"`) {
 		t.Fatalf("expected event source not to resolve identity through usage event source, got %s", body)
 	}
-	if !contains(body, `"source":"Fallback Provider"`) {
+	if !contains(body, `"source":"AI account 1"`) {
 		t.Fatalf("expected auth_index fallback when identity is missing, got %s", body)
 	}
 }
@@ -417,7 +417,7 @@ func TestUsageEventsKeepsFallbackSourceWhenAuthIndexIsMissing(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", resp.Code)
 	}
 	body := resp.Body.String()
-	if !contains(body, `"source":"OpenAI Mirror"`) || contains(body, `"source_key"`) {
+	if !contains(body, `"source":"AI account 1"`) || contains(body, `"source_key"`) || contains(body, "OpenAI Mirror") || contains(body, `openai account`) {
 		t.Fatalf("expected provider source fallback without source_key, got %s", body)
 	}
 }
@@ -523,7 +523,7 @@ func TestUsageEventSourceFilterOptionsReturnsIdentitySources(t *testing.T) {
 		t.Fatalf("expected source filter options endpoint to use identities only, events=%d filterOptions=%d", provider.filterCalls, provider.filterOptionCalls)
 	}
 	body := resp.Body.String()
-	if !contains(body, `"sources":[`) || !contains(body, `"value":"authidx-source-a"`) || !contains(body, `"label":"Claude Main"`) || !contains(body, `"displayName":"Claude Main"`) || !contains(body, `"value":"auth-1"`) || !contains(body, `"label":"Auth User"`) {
+	if !contains(body, `"sources":[`) || !contains(body, `"value":"authidx-source-a"`) || !contains(body, `"label":"AI account 1"`) || !contains(body, `"displayName":"AI account 1"`) || !contains(body, `"value":"auth-1"`) || !contains(body, `"label":"Auth User"`) {
 		t.Fatalf("expected stable identity source filter options with display names, got %s", body)
 	}
 	if contains(body, `"models"`) {
@@ -535,7 +535,7 @@ func TestUsageEventSourceFilterOptionsReturnsIdentitySources(t *testing.T) {
 	if contains(body, `Zero Request User`) || contains(body, `Zero Provider`) || contains(body, `auth-zero`) || contains(body, `authidx-source-zero`) {
 		t.Fatalf("expected zero-request source filter options to be omitted, got %s", body)
 	}
-	if contains(body, `Deleted Source`) || contains(body, `Deleted Provider`) || contains(body, `authidx-deleted`) {
+	if contains(body, `openai account`) || contains(body, `codex account`) || contains(body, `claude account`) || contains(body, `Claude Main`) || contains(body, `Provider A`) || contains(body, `Deleted Source`) || contains(body, `Deleted Provider`) || contains(body, `authidx-deleted`) {
 		t.Fatalf("expected deleted source filter options to be omitted, got %s", body)
 	}
 }

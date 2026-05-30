@@ -14,6 +14,7 @@ import {
   normalizeAuthIndex,
   type ModelPrice,
 } from '@/utils/usage';
+import { safeAiProviderAccountLabel, safeApiKeyDisplayLabel } from '@/utils/sensitiveDisplay';
 import { downloadBlob } from '@/utils/download';
 import styles from '@/pages/UsagePage.module.scss';
 
@@ -42,10 +43,8 @@ type RequestEventRow = {
   reasoningEffort: string;
   requestType: string;
   endpoint: string;
-  sourceRaw: string;
   source: string;
   sourceType: string;
-  authIndex: string;
   isDelete: boolean;
   failed: boolean;
   latencyMs: number | null;
@@ -176,9 +175,9 @@ export function RequestEventsDetailsCard({
         authIndexRaw === null || authIndexRaw === undefined || authIndexRaw === ''
           ? '-'
           : normalizeAuthIndex(authIndexRaw) || '-';
-      const source = String(event.source ?? '').trim() || '-';
+      const source = safeAiProviderAccountLabel(event.source, index);
       const sourceType = String(event.source_type ?? '').trim();
-      const apiKey = String(event.api_key ?? '').trim() || '-';
+      const apiKey = safeApiKeyDisplayLabel(event.api_key);
       const model = String(event.model ?? '').trim() || '-';
       const reasoningEffort = String(event.reasoning_effort ?? '').trim() || '-';
       const endpointFields = parseRequestEndpoint(event.endpoint);
@@ -218,10 +217,8 @@ export function RequestEventsDetailsCard({
         reasoningEffort,
         requestType: endpointFields.requestType,
         endpoint: endpointFields.endpoint,
-        sourceRaw: sourceRaw || '-',
         source,
         sourceType,
-        authIndex,
         isDelete: event.isDelete === true,
         failed: event.failed === true,
         latencyMs,
@@ -252,11 +249,14 @@ export function RequestEventsDetailsCard({
   const sourceOptions = useMemo(() => {
     const options = [
       { value: ALL_FILTER, label: t('usage_stats.filter_all') },
-      ...backendSourceOptions.map((source) => ({ value: source.value, label: source.displayName || source.label || source.value })),
+      ...backendSourceOptions.map((source, index) => ({ value: source.value, label: safeAiProviderAccountLabel(source.displayName || source.label || source.value, index) })),
     ];
     const selectedSource = backendSourceOptions.find((source) => source.value === sourceFilter);
-    const selectedLabel = selectedSource?.displayName || selectedSource?.label;
-    return appendSelectedOption(options, sourceFilter, selectedLabel || sourceFilter);
+    const selectedIndex = backendSourceOptions.findIndex((source) => source.value === sourceFilter);
+    const selectedLabel = selectedSource
+      ? safeAiProviderAccountLabel(selectedSource.displayName || selectedSource.label || selectedSource.value, selectedIndex >= 0 ? selectedIndex : 0)
+      : undefined;
+    return appendSelectedOption(options, sourceFilter, selectedLabel || '-');
   }, [backendSourceOptions, sourceFilter, t]);
 
   const resultOptions = useMemo(
@@ -315,8 +315,6 @@ export function RequestEventsDetailsCard({
       ...(hasLatencyData ? ['latency_ms'] : []),
       'request_type',
       'endpoint',
-      'source_raw',
-      'auth_index',
       'input_tokens',
       'output_tokens',
       'reasoning_tokens',
@@ -337,8 +335,6 @@ export function RequestEventsDetailsCard({
         ...(hasLatencyData ? [row.latencyMs ?? ''] : []),
         row.requestType === '-' ? '' : row.requestType,
         row.endpoint === '-' ? '' : row.endpoint,
-        row.sourceRaw,
-        row.authIndex,
         row.inputTokens,
         row.outputTokens,
         row.reasoningTokens,
@@ -372,8 +368,6 @@ export function RequestEventsDetailsCard({
       ...(hasLatencyData && row.latencyMs !== null ? { latency_ms: row.latencyMs } : {}),
       request_type: row.requestType === '-' ? '' : row.requestType,
       endpoint: row.endpoint === '-' ? '' : row.endpoint,
-      source_raw: row.sourceRaw,
-      auth_index: row.authIndex,
       tokens: {
         input_tokens: row.inputTokens,
         output_tokens: row.outputTokens,
@@ -506,14 +500,9 @@ export function RequestEventsDetailsCard({
                     <td className={styles.requestEventsSourceCell} title={row.source}>
                       <span className={styles.requestEventsSourceStack}>
                         <span className={styles.requestEventsSourceValue}>{row.source}</span>
-                        {(row.isDelete || row.sourceType) && (
+                        {row.isDelete && (
                           <span className={styles.requestEventsSourceTags}>
-                            {row.sourceType && (
-                              <span className={styles.credentialType}>{row.sourceType}</span>
-                            )}
-                            {row.isDelete && (
-                              <span className={styles.requestEventsDeletedTag}>{t('usage_stats.deleted')}</span>
-                            )}
+                            <span className={styles.requestEventsDeletedTag}>{t('usage_stats.deleted')}</span>
                           </span>
                         )}
                       </span>

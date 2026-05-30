@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"cpa-usage-keeper/internal/entities"
 	"cpa-usage-keeper/internal/service"
 	servicedto "cpa-usage-keeper/internal/service/dto"
 	"github.com/gin-gonic/gin"
@@ -59,16 +60,7 @@ func registerPricingRoutes(router gin.IRoutes, pricingProvider service.PricingPr
 			return
 		}
 
-		response := make([]pricingEntryResponse, 0, len(settings))
-		for _, setting := range settings {
-			response = append(response, pricingEntryResponse{
-				Model:                setting.Model,
-				PromptPricePer1M:     setting.PromptPricePer1M,
-				CompletionPricePer1M: setting.CompletionPricePer1M,
-				CachePricePer1M:      setting.CachePricePer1M,
-			})
-		}
-		c.JSON(http.StatusOK, pricingListResponse{Pricing: response})
+		c.JSON(http.StatusOK, pricingListResponse{Pricing: pricingSettingsResponse(settings)})
 	})
 
 	router.PUT("/pricing", func(c *gin.Context) {
@@ -99,6 +91,49 @@ func registerPricingRoutes(router gin.IRoutes, pricingProvider service.PricingPr
 		}
 		c.Status(http.StatusNoContent)
 	})
+}
+
+func registerReadOnlyPricingRoutes(router gin.IRoutes, pricingProvider service.PricingProvider) {
+	router.GET("/pricing", func(c *gin.Context) {
+		if pricingProvider == nil {
+			c.JSON(http.StatusOK, pricingListResponse{Pricing: []pricingEntryResponse{}})
+			return
+		}
+		settings, err := pricingProvider.ListPricing(c.Request.Context())
+		if err != nil {
+			writeInternalError(c, "list pricing failed", err)
+			return
+		}
+		c.JSON(http.StatusOK, pricingListResponse{Pricing: pricingSettingsResponse(settings)})
+	})
+}
+
+func registerAvailableModelsRoutes(router gin.IRoutes, provider service.AvailableModelsProvider) {
+	router.GET("/models/available", func(c *gin.Context) {
+		if provider == nil {
+			c.JSON(http.StatusOK, usedModelsResponse{Models: []string{}})
+			return
+		}
+		models, err := provider.FetchAvailableModels(c.Request.Context())
+		if err != nil {
+			writeInternalError(c, "fetch available models failed", err)
+			return
+		}
+		c.JSON(http.StatusOK, usedModelsResponse{Models: models})
+	})
+}
+
+func pricingSettingsResponse(settings []entities.ModelPriceSetting) []pricingEntryResponse {
+	response := make([]pricingEntryResponse, 0, len(settings))
+	for _, setting := range settings {
+		response = append(response, pricingEntryResponse{
+			Model:                setting.Model,
+			PromptPricePer1M:     setting.PromptPricePer1M,
+			CompletionPricePer1M: setting.CompletionPricePer1M,
+			CachePricePer1M:      setting.CachePricePer1M,
+		})
+	}
+	return response
 }
 
 func updatePricing(c *gin.Context, pricingProvider service.PricingProvider, pathModel string) {

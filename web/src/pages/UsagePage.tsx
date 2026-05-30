@@ -14,8 +14,8 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { ApiError, fetchAnalysis, fetchCpaApiKeyOptions, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout } from '@/lib/api';
-import type { AnalysisResponse, CpaApiKeyOption, UsageEvent, UsageSourceFilterOption } from '@/lib/types';
+import { ApiError, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchPricing, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout } from '@/lib/api';
+import type { AnalysisResponse, CpaApiKeyOption, PricingEntry, UsageEvent, UsageSourceFilterOption } from '@/lib/types';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { Select } from '@/components/ui/Select';
@@ -29,9 +29,12 @@ import {
   ChartLineSelector,
   AnalysisPanel,
   RequestEventsDetailsCard,
+  ModelInfoPanel,
   TokenBreakdownChart,
   CostTrendChart,
   ServiceHealthCard,
+  AiProviderCredentialsSection,
+  useCredentialsTabData,
   useUsageData,
   useSparklines,
   useChartData
@@ -44,6 +47,8 @@ import {
   type UsageFilterWindow,
   type UsageTimeRange
 } from '@/utils/usage';
+import type { ModelPrice } from '@/utils/usage';
+import { safeApiKeyDisplayLabel } from '@/utils/sensitiveDisplay';
 import type { Theme } from '@/types';
 import { BrandLink } from '@/components/BrandLink';
 import styles from './UsagePage.module.scss';
@@ -93,13 +98,15 @@ const THEME_OPTIONS: ReadonlyArray<{ value: Theme; labelKey: string }> = [
   { value: 'dark', labelKey: 'usage_stats.theme_dark' },
   { value: 'auto', labelKey: 'usage_stats.theme_auto' }
 ];
-const USAGE_TAB_OPTIONS = ['overview', 'analysis', 'events'] as const;
+const USAGE_TAB_OPTIONS = ['overview', 'analysis', 'events', 'ai-provider', 'model-info'] as const;
 type UsageTab = (typeof USAGE_TAB_OPTIONS)[number];
 type Translate = (key: string) => string;
 const USAGE_TAB_LABEL_KEYS: Record<UsageTab, string> = {
   overview: 'usage_stats.tab_overview',
   analysis: 'usage_stats.tab_analysis',
   events: 'usage_stats.tab_events',
+  'ai-provider': 'usage_stats.tab_ai_provider',
+  'model-info': 'usage_stats.tab_model_info',
 };
 const DEFAULT_USAGE_TAB: UsageTab = 'overview';
 const USAGE_TAB_STORAGE_KEY = 'cli-proxy-usage-tab-v1';
@@ -108,13 +115,13 @@ const REQUEST_EVENTS_DEFAULT_PAGE_SIZE = 100;
 const ALL_REQUEST_EVENTS_FILTER = '__all__';
 const OVERVIEW_AUTO_REFRESH_INTERVAL_MS = 10_000;
 
-export const getCredentialSectionVisibility = (_tab: string) => ({
-  enabled: false,
+export const getCredentialSectionVisibility = (tab: string) => ({
+  enabled: tab === 'ai-provider',
   showAuthFiles: false,
-  showAiProvider: false,
+  showAiProvider: tab === 'ai-provider',
 });
 
-export const shouldShowRangeControls = (tab: UsageTab) => USAGE_TAB_OPTIONS.includes(tab);
+export const shouldShowRangeControls = (tab: UsageTab) => tab === 'overview' || tab === 'analysis' || tab === 'events';
 export const shouldShowApiKeyFilter = (tab: UsageTab) => shouldShowRangeControls(tab);
 export const shouldShowUpdateCheckButton = () => false;
 export const isUsagePageVisible = (documentRef?: Pick<Document, 'visibilityState'>) => {
@@ -136,7 +143,21 @@ export const shouldAutoRefreshUsageTab = ({
   return false;
 };
 
-export const shouldLoadPricingOnUsageTabEntry = () => false;
+export const shouldLoadPricingOnUsageTabEntry = (tab: UsageTab) => tab === 'events' || tab === 'model-info';
+
+export const pricingEntriesToModelPriceMap = (pricing: PricingEntry[]): Record<string, ModelPrice> => {
+  const prices: Record<string, ModelPrice> = {};
+  for (const entry of pricing) {
+    const model = entry.model.trim();
+    if (!model) continue;
+    prices[model] = {
+      prompt: Number(entry.prompt_price_per_1m) || 0,
+      completion: Number(entry.completion_price_per_1m) || 0,
+      cache: Number(entry.cache_price_per_1m) || 0,
+    };
+  }
+  return prices;
+};
 
 type RequestEventFilterState = {
   model: string;
@@ -416,6 +437,14 @@ export const getTimeRangeOptions = (translate: Translate) =>
     label: translate(option.labelKey),
   }));
 
+export const getApiKeySelectOptions = (apiKeyOptions: CpaApiKeyOption[], translate: Translate): Array<{ value: string; label: string }> => [
+  { value: '', label: translate('usage_stats.api_key_filter_all') },
+  ...apiKeyOptions.map((option, index) => ({
+    value: option.id,
+    label: safeApiKeyDisplayLabel(option.label, `API Key ${index + 1}`),
+  })),
+];
+
 const isTodayTimeRange = (value: UsageTimeRange): value is 'today' | 'yesterday' => value === 'today' || value === 'yesterday';
 
 export const getPreferredOverviewChartPeriod = (filterWindow: UsageFilterWindow): 'hour' | 'day' => (
@@ -474,6 +503,7 @@ const emptyAnalysisResponse = (): AnalysisResponse => ({
   timezone: '',
   token_usage: [],
   api_key_composition: [],
+  api_key_cost_composition: [],
   model_composition: [],
   auth_files_composition: [],
   ai_provider_composition: [],
@@ -508,6 +538,10 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const [eventsModelFilter, setEventsModelFilter] = useState(ALL_REQUEST_EVENTS_FILTER);
   const [eventsSourceFilter, setEventsSourceFilter] = useState(ALL_REQUEST_EVENTS_FILTER);
   const [eventsResultFilter, setEventsResultFilter] = useState(ALL_REQUEST_EVENTS_FILTER);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelPricing, setModelPricing] = useState<PricingEntry[]>([]);
+  const [modelInfoLoading, setModelInfoLoading] = useState(false);
+  const [modelInfoError, setModelInfoError] = useState('');
   const [manualRefreshLoading, setManualRefreshLoading] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const customStartInputRef = useRef<HTMLInputElement | null>(null);
@@ -518,6 +552,25 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const setTheme = useThemeStore((state) => state.setTheme);
   const isDark = resolvedTheme === 'dark';
   const isMobile = useMediaQuery('(max-width: 768px)');
+  const credentialVisibility = getCredentialSectionVisibility(activeTab);
+  const {
+    aiProviderRows,
+    aiProviderTotal,
+    aiProviderPage,
+    aiProviderTotalPages,
+    aiProviderPageSize,
+    aiProviderSort,
+    setAiProviderPage,
+    setAiProviderPageSize,
+    setAiProviderSort,
+    loading: credentialsLoading,
+    error: credentialsError,
+    refresh: refreshCredentials,
+  } = useCredentialsTabData({
+    enabledAuthFiles: credentialVisibility.showAuthFiles,
+    enabledAiProviders: credentialVisibility.showAiProvider,
+    onAuthRequired,
+  });
 
   const queryWindow = useMemo(() => buildUsageRangeQuery({
     range: timeRange,
@@ -542,6 +595,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
     customEnd: queryWindow.end,
   }), [queryWindow.end, queryWindow.start, timeRange, usage?.usage]);
   const overviewModelNames = useMemo(() => getOverviewModelNames(usage), [usage]);
+  const eventModelPrices = useMemo(() => pricingEntriesToModelPriceMap(modelPricing), [modelPricing]);
   const sanitizedChartLines = useMemo(() => sanitizeChartLines(chartLines, overviewModelNames), [chartLines, overviewModelNames]);
   const hourWindowHours = useMemo(() => getOverviewHourWindowHours({ timeRange, filterWindow }), [filterWindow, timeRange]);
   const filterWindowEndMs = useMemo(() => getOverviewChartEndMs({
@@ -654,6 +708,12 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
     setEventsResultFilter(sanitized.result);
   }, [eventsModelFilter, eventsResultFilter, eventsSourceFilter]);
 
+  const loadModelPricing = useCallback(async () => {
+    const controller = new AbortController();
+    const pricingResponse = await fetchPricing(controller.signal);
+    setModelPricing(pricingResponse.pricing ?? []);
+  }, []);
+
   const loadEvents = useCallback(async () => {
     if (!customRangeReady) return;
     const controller = new AbortController();
@@ -686,16 +746,44 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
     }
   }, [customRangeReady, eventsModelFilter, eventsPage, eventsPageSize, eventsResultFilter, eventsSourceFilter, onAuthRequired, queryWindow.end, queryWindow.start, selectedApiKeyId, timeRange]);
 
+  const loadModelInfo = useCallback(async () => {
+    const controller = new AbortController();
+    setModelInfoLoading(true);
+    setModelInfoError('');
+    try {
+      const [modelsResponse, pricingResponse] = await Promise.all([
+        fetchAvailableModels(controller.signal),
+        fetchPricing(controller.signal),
+      ]);
+      setAvailableModels(modelsResponse.models ?? []);
+      setModelPricing(pricingResponse.pricing ?? []);
+    } catch (fetchError) {
+      if (fetchError instanceof ApiError && fetchError.status === 401) {
+        onAuthRequired?.();
+        setModelInfoError('AUTH_REQUIRED');
+      } else {
+        setModelInfoError(fetchError instanceof Error ? fetchError.message : 'Failed to load model info');
+      }
+      setAvailableModels([]);
+      setModelPricing([]);
+    } finally {
+      setModelInfoLoading(false);
+    }
+  }, [onAuthRequired]);
+
   const refreshActiveTab = useCallback(async () => {
     if (activeTab === 'overview') {
       await loadUsage();
     } else if (activeTab === 'analysis') {
       await loadAnalysis();
     } else if (activeTab === 'events') {
-      await loadEventFilterOptions();
-      await loadEvents();
+      await Promise.all([loadModelPricing(), loadEventFilterOptions(), loadEvents()]);
+    } else if (activeTab === 'ai-provider') {
+      await refreshCredentials();
+    } else if (activeTab === 'model-info') {
+      await loadModelInfo();
     }
-  }, [activeTab, loadAnalysis, loadEventFilterOptions, loadEvents, loadUsage]);
+  }, [activeTab, loadAnalysis, loadEventFilterOptions, loadEvents, loadModelInfo, loadModelPricing, loadUsage, refreshCredentials]);
 
   useHeaderRefresh(refreshActiveTab);
 
@@ -725,6 +813,23 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
     if (activeTab !== 'events') return;
     void loadEvents();
   }, [activeTab, loadEvents]);
+
+  useEffect(() => {
+    if (activeTab !== 'events') return;
+    void loadModelPricing().catch((fetchError) => {
+      if (fetchError instanceof ApiError && fetchError.status === 401) {
+        onAuthRequired?.();
+        setEventsError('AUTH_REQUIRED');
+        return;
+      }
+      setEventsError(fetchError instanceof Error ? fetchError.message : 'Failed to load model pricing');
+    });
+  }, [activeTab, loadModelPricing, onAuthRequired]);
+
+  useEffect(() => {
+    if (activeTab !== 'model-info') return;
+    void loadModelInfo();
+  }, [activeTab, loadModelInfo]);
 
   const handleManualRefresh = useCallback(async () => {
     setManualRefreshLoading(true);
@@ -783,10 +888,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const tabOptions = useMemo(() => getUsageTabOptions(t), [t]);
   const timeRangeOptions = useMemo(() => getTimeRangeOptions(t), [t]);
   const themeOptions = useMemo(() => THEME_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) })), [t]);
-  const apiKeySelectOptions = useMemo(() => [
-    { value: '', label: t('usage_stats.api_key_filter_all') },
-    ...apiKeyOptions.map((option) => ({ value: option.id, label: option.label })),
-  ], [apiKeyOptions, t]);
+  const apiKeySelectOptions = useMemo(() => getApiKeySelectOptions(apiKeyOptions, t), [apiKeyOptions, t]);
   const lastSyncAt = lastRefreshedAt;
 
   const handleCustomDateInputActivate = (event: SyntheticEvent<HTMLInputElement>) => {
@@ -874,6 +976,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
               </div>
 
               <div className={styles.toolbarActionsRight}>
+                {shouldShowRangeControls(activeTab) && (
                 <div className={styles.usageFilterBar}>
                   <div className={styles.apiKeyFilterGroup}>
                     <label className={`${styles.usageFilterField} ${styles.apiKeyFilterField}`.trim()}>
@@ -965,6 +1068,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
                   {isCustomRange && customRangeHint && <span className={styles.customRangeHint}>{customRangeHint}</span>}
                   {isCustomRange && customRangeError && <span className={styles.customRangeError}>{customRangeError}</span>}
                 </div>
+                )}
                 <div className={styles.usageRefreshSlot}>
                   <div className={styles.usageFilterActions}>
                     <div className={styles.refreshSwitcher} role="group" aria-label={t('usage_stats.refresh')}>
@@ -995,6 +1099,8 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
 
             {apiKeyOptionsError && <div className={styles.errorBox}>{apiKeyOptionsError}</div>}
             {activeTab === 'overview' && error && <div className={styles.errorBox}>{error === 'AUTH_REQUIRED' ? t('auth.session_expired') : error}</div>}
+            {activeTab === 'ai-provider' && credentialsError && <div className={styles.errorBox}>{credentialsError}</div>}
+            {activeTab === 'model-info' && modelInfoError && <div className={styles.errorBox}>{modelInfoError === 'AUTH_REQUIRED' ? t('auth.session_expired') : modelInfoError}</div>}
 
             {activeTab === 'overview' && (
               <>
@@ -1087,7 +1193,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
                   modelFilter={eventsModelFilter}
                   sourceFilter={eventsSourceFilter}
                   resultFilter={eventsResultFilter}
-                  modelPrices={{}}
+                  modelPrices={eventModelPrices}
                   onPageChange={setEventsPage}
                   onPageSizeChange={handleEventsPageSizeChange}
                   onModelFilterChange={handleEventsModelFilterChange}
@@ -1095,6 +1201,29 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
                   onResultFilterChange={handleEventsResultFilterChange}
                 />
               </>
+            )}
+
+            {activeTab === 'ai-provider' && (
+              <AiProviderCredentialsSection
+                rows={aiProviderRows}
+                total={aiProviderTotal}
+                page={aiProviderPage}
+                totalPages={aiProviderTotalPages}
+                pageSize={aiProviderPageSize}
+                sort={aiProviderSort}
+                loading={credentialsLoading}
+                onPageChange={setAiProviderPage}
+                onPageSizeChange={setAiProviderPageSize}
+                onSortChange={setAiProviderSort}
+              />
+            )}
+
+            {activeTab === 'model-info' && (
+              <ModelInfoPanel
+                availableModels={availableModels}
+                pricing={modelPricing}
+                loading={modelInfoLoading}
+              />
             )}
           </div>
         </main>

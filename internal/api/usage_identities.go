@@ -82,9 +82,10 @@ func registerUsageIdentityRoutes(router gin.IRoutes, usageIdentityProvider servi
 		}
 
 		// 复用统一响应映射，保证分页接口和旧列表接口的字段/脱敏规则一致。
+		providerLabels := newProviderAccountLabels(result.Items)
 		response := make([]usageIdentityResponse, 0, len(result.Items))
 		for _, item := range result.Items {
-			response = append(response, mapUsageIdentityResponse(item))
+			response = append(response, mapUsageIdentityResponse(item, providerLabels))
 		}
 		typeCounts := make([]usageIdentityTypeCount, 0, len(result.TypeCounts))
 		for _, item := range result.TypeCounts {
@@ -112,9 +113,10 @@ func registerUsageIdentityRoutes(router gin.IRoutes, usageIdentityProvider servi
 			return
 		}
 
+		providerLabels := newProviderAccountLabels(items)
 		response := make([]usageIdentityResponse, 0, len(items))
 		for _, item := range items {
-			response = append(response, mapUsageIdentityResponse(item))
+			response = append(response, mapUsageIdentityResponse(item, providerLabels))
 		}
 		c.JSON(http.StatusOK, usageIdentitiesResponse{Identities: response})
 	})
@@ -176,11 +178,33 @@ func totalPages(total int64, pageSize int) int {
 	return int((total + int64(pageSize) - 1) / int64(pageSize))
 }
 
-func mapUsageIdentityResponse(item entities.UsageIdentity) usageIdentityResponse {
-	// AI provider 的 identity 是 API Key，只在返回给前端时脱敏，数据库原值不改。
+func mapUsageIdentityResponse(item entities.UsageIdentity, providerLabels providerAccountLabels) usageIdentityResponse {
 	identity := item.Identity
+	name := item.Name
+	displayName := helper.UsageIdentityDisplayName(item)
+	authTypeName := item.AuthTypeName
+	typeName := item.Type
+	provider := item.Provider
+	prefix := item.Prefix
+	priority := item.Priority
+	note := item.Note
+	planType := item.PlanType
+	activeStart := item.ActiveStart
+	activeUntil := item.ActiveUntil
 	if item.AuthType == entities.UsageIdentityAuthTypeAIProvider {
-		identity = helper.RedactSensitiveValue(item.Identity)
+		label := providerLabels.labelFor(item)
+		identity = label
+		name = label
+		displayName = label
+		authTypeName = ""
+		typeName = ""
+		provider = ""
+		prefix = ""
+		priority = nil
+		note = nil
+		planType = nil
+		activeStart = nil
+		activeUntil = nil
 	}
 
 	disabled := false
@@ -190,20 +214,20 @@ func mapUsageIdentityResponse(item entities.UsageIdentity) usageIdentityResponse
 
 	return usageIdentityResponse{
 		ID:                         strconv.FormatInt(item.ID, 10),
-		Name:                       item.Name,
-		DisplayName:                helper.UsageIdentityDisplayName(item),
+		Name:                       name,
+		DisplayName:                displayName,
 		AuthType:                   item.AuthType,
-		AuthTypeName:               item.AuthTypeName,
+		AuthTypeName:               authTypeName,
 		Identity:                   identity,
-		Type:                       item.Type,
-		Provider:                   item.Provider,
-		Prefix:                     item.Prefix,
-		Priority:                   item.Priority,
+		Type:                       typeName,
+		Provider:                   provider,
+		Prefix:                     prefix,
+		Priority:                   priority,
 		Disabled:                   disabled,
-		Note:                       item.Note,
-		PlanType:                   item.PlanType,
-		ActiveStart:                item.ActiveStart,
-		ActiveUntil:                item.ActiveUntil,
+		Note:                       note,
+		PlanType:                   planType,
+		ActiveStart:                activeStart,
+		ActiveUntil:                activeUntil,
 		TotalRequests:              item.TotalRequests,
 		SuccessCount:               item.SuccessCount,
 		FailureCount:               item.FailureCount,

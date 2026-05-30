@@ -25,6 +25,8 @@ type Config struct {
 	AppPort     string
 	AppBasePath string
 	SQLitePath  string
+	BaseURL     string
+	Key         string
 
 	// Deprecated fields kept so lower-level packages and tests that still use the
 	// old write-capable helpers can compile while the app wires read-only mode.
@@ -93,6 +95,8 @@ func Load(options LoadOptions) (*Config, error) {
 		AppPort:        getString("APP_PORT", "8080"),
 		AppBasePath:    appBasePath,
 		SQLitePath:     strings.TrimSpace(os.Getenv("APP_DB_PATH")),
+		BaseURL:        strings.TrimSpace(os.Getenv("BASE_URL")),
+		Key:            strings.TrimSpace(os.Getenv("KEY")),
 		LogLevel:       "info",
 		LogFileEnabled: false,
 		AuthSessionTTL: 7 * 24 * time.Hour,

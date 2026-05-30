@@ -294,6 +294,16 @@ export interface AnalysisCompositionItem {
   percent: number
 }
 
+export interface AnalysisCostCompositionItem {
+  key: string
+  label: string
+  total_tokens?: number
+  requests: number
+  percent?: number
+  cost: number
+  cost_percent: number
+}
+
 export interface AnalysisHeatmapCell {
   api_key: string
   model: string
@@ -315,6 +325,7 @@ export interface AnalysisResponse {
   range_end?: string
   token_usage: AnalysisTokenUsageBucket[]
   api_key_composition: AnalysisCompositionItem[]
+  api_key_cost_composition: AnalysisCostCompositionItem[]
   model_composition: AnalysisCompositionItem[]
   auth_files_composition: AnalysisCompositionItem[]
   ai_provider_composition: AnalysisCompositionItem[]
@@ -350,6 +361,10 @@ export interface PricingEntry {
 }
 
 export interface UsedModelsResponse {
+  models: string[]
+}
+
+export interface AvailableModelsResponse {
   models: string[]
 }
 

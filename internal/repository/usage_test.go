@@ -162,8 +162,8 @@ func TestBuildAnalysisWithFilterBuildsIdentityCompositionsFromActiveUsageIdentit
 	if err := db.Create([]entities.UsageIdentity{
 		{AuthType: entities.UsageIdentityAuthTypeAuthFile, AuthTypeName: "auth_file", Identity: "auth-file-1", Name: "Auth File One"},
 		{AuthType: entities.UsageIdentityAuthTypeAuthFile, AuthTypeName: "auth_file", Identity: "auth-file-deleted", Name: "Deleted Auth File", IsDeleted: true},
-		{AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "ai_provider", Identity: "provider-1", Name: "Provider One", Prefix: "Team Prefix", BaseURL: "https://api.openai.com/v1/"},
-		{AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "ai_provider", Identity: "shared-index", Name: "Provider Shared", Prefix: "Shared Prefix"},
+		{AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "ai_provider", Identity: "provider-1", Type: "codex", Name: "Provider One", Prefix: "Team Prefix", BaseURL: "https://api.openai.com/v1/"},
+		{AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "ai_provider", Identity: "shared-index", Type: "codex", Name: "Provider Shared", Prefix: "Shared Prefix"},
 		{AuthType: entities.UsageIdentityAuthTypeAuthFile, AuthTypeName: "auth_file", Identity: "shared-index", Name: "Auth Shared"},
 	}).Error; err != nil {
 		t.Fatalf("insert usage identities: %v", err)
@@ -202,11 +202,57 @@ func TestBuildAnalysisWithFilterBuildsIdentityCompositionsFromActiveUsageIdentit
 	if len(analysis.AIProviderComposition) != 2 {
 		t.Fatalf("expected two ai provider composition rows, got %+v", analysis.AIProviderComposition)
 	}
-	if analysis.AIProviderComposition[0].Key != "shared-index" || analysis.AIProviderComposition[0].Label != "Provider Shared(Shared Prefix)" || analysis.AIProviderComposition[0].TotalTokens != 90 {
-		t.Fatalf("expected shared provider row first, got %+v", analysis.AIProviderComposition)
+	if analysis.AIProviderComposition[0].Key != "shared-index" || analysis.AIProviderComposition[0].Label != "AI account 2" || analysis.AIProviderComposition[0].TotalTokens != 90 {
+		t.Fatalf("expected shared provider row first with anonymized label, got %+v", analysis.AIProviderComposition)
 	}
-	if analysis.AIProviderComposition[1].Key != "provider-1" || analysis.AIProviderComposition[1].Label != "Provider One(Team Prefix @ api.openai.com)" || analysis.AIProviderComposition[1].TotalTokens != 60 {
-		t.Fatalf("expected active provider row second, got %+v", analysis.AIProviderComposition)
+	if analysis.AIProviderComposition[1].Key != "provider-1" || analysis.AIProviderComposition[1].Label != "AI account 1" || analysis.AIProviderComposition[1].TotalTokens != 60 {
+		t.Fatalf("expected active provider row second with anonymized label, got %+v", analysis.AIProviderComposition)
+	}
+}
+
+func TestBuildAnalysisWithFilterBuildsAPIKeyCostCompositionFromCurrentPrices(t *testing.T) {
+	db := openUsageTestDatabase(t)
+	bucket := time.Date(2026, 4, 20, 9, 0, 0, 0, time.UTC)
+	if err := db.Create([]entities.CPAAPIKey{
+		{APIKey: "sk-a", DisplayKey: "sk-*********a"},
+		{APIKey: "sk-b", DisplayKey: "sk-*********b"},
+	}).Error; err != nil {
+		t.Fatalf("insert CPA API keys: %v", err)
+	}
+	if err := db.Create(&entities.ModelPriceSetting{
+		Model:                "priced-model",
+		PromptPricePer1M:     2,
+		CompletionPricePer1M: 4,
+		CachePricePer1M:      1,
+	}).Error; err != nil {
+		t.Fatalf("insert model price setting: %v", err)
+	}
+	if err := db.Create([]entities.UsageOverviewHourlyStat{
+		{BucketStart: bucket, APIGroupKey: "sk-a", Model: "priced-model", RequestCount: 2, InputTokens: 1_000_000, OutputTokens: 500_000, CachedTokens: 200_000, TotalTokens: 1_500_000},
+		{BucketStart: bucket, APIGroupKey: "sk-b", Model: "priced-model", RequestCount: 1, InputTokens: 0, OutputTokens: 1_000_000, TotalTokens: 1_000_000},
+		{BucketStart: bucket, APIGroupKey: "sk-a", Model: "missing-price-model", RequestCount: 1, InputTokens: 1_000_000, TotalTokens: 1_000_000},
+	}).Error; err != nil {
+		t.Fatalf("insert hourly stats: %v", err)
+	}
+	if err := db.Migrator().DropTable(&entities.UsageEvent{}); err != nil {
+		t.Fatalf("drop usage_events: %v", err)
+	}
+	start := bucket
+	end := bucket.Add(time.Hour)
+
+	analysis, err := BuildAnalysisWithFilter(db, repodto.UsageQueryFilter{StartTime: &start, EndTime: &end})
+	if err != nil {
+		t.Fatalf("BuildAnalysisWithFilter returned error: %v", err)
+	}
+
+	if len(analysis.APIKeyCostComposition) != 2 {
+		t.Fatalf("expected two api key cost composition rows, got %+v", analysis.APIKeyCostComposition)
+	}
+	if analysis.APIKeyCostComposition[0].Key != "sk-b" || analysis.APIKeyCostComposition[0].Cost != 4 || analysis.APIKeyCostComposition[0].Requests != 1 {
+		t.Fatalf("expected sk-b cost row first, got %+v", analysis.APIKeyCostComposition)
+	}
+	if analysis.APIKeyCostComposition[1].Key != "sk-a" || !floatEquals(analysis.APIKeyCostComposition[1].Cost, 3.8, 0.000001) || analysis.APIKeyCostComposition[1].Requests != 2 {
+		t.Fatalf("expected sk-a cost row second, got %+v", analysis.APIKeyCostComposition)
 	}
 }
 
@@ -441,4 +487,12 @@ func openUsageTestDatabase(t *testing.T) *gorm.DB {
 	}
 	closeTestDatabase(t, db)
 	return db
+}
+
+func floatEquals(left, right, tolerance float64) bool {
+	diff := left - right
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff <= tolerance
 }

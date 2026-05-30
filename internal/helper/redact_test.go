@@ -24,27 +24,27 @@ func TestRedactSensitiveValueUsesCanonicalFormat(t *testing.T) {
 	}
 }
 
-func TestCPAAPIKeyDisplayNamePrefersAlias(t *testing.T) {
+func TestCPAAPIKeyDisplayNameIgnoresAlias(t *testing.T) {
 	row := entities.CPAAPIKey{APIKey: "sk-alpha123456", KeyAlias: "  Production  ", DisplayKey: "sk-B********************************Zejy"}
 
-	if got := CPAAPIKeyDisplayName(row); got != "Production" {
-		t.Fatalf("expected alias label, got %q", got)
+	if got := CPAAPIKeyDisplayName(row); got != "sk-a*****************3456" {
+		t.Fatalf("expected masked key label, got %q", got)
 	}
 }
 
 func TestCPAAPIKeyDisplayNameFallsBackToMaskedRawKey(t *testing.T) {
 	row := entities.CPAAPIKey{APIKey: "sk-alpha123456", DisplayKey: "sk-B********************************Zejy"}
 
-	if got := CPAAPIKeyDisplayName(row); got != "sk-*********123456" {
-		t.Fatalf("expected canonical masked key fallback, got %q", got)
+	if got := CPAAPIKeyDisplayName(row); got != "sk-a*****************3456" {
+		t.Fatalf("expected dashboard masked key fallback, got %q", got)
 	}
 }
 
 func TestCPAAPIKeyMaskedDisplayKeyMasksRawKeyWithCanonicalFormat(t *testing.T) {
 	row := entities.CPAAPIKey{APIKey: "sk-BabcdefghijklmnopqrstuvwxyzmaWyTA", DisplayKey: "sk-B********************************maWy"}
 
-	if got := CPAAPIKeyMaskedDisplayKey(row); got != "sk-*********maWyTA" {
-		t.Fatalf("expected canonical display key, got %q", got)
+	if got := CPAAPIKeyMaskedDisplayKey(row); got != "sk-B*****************WyTA" {
+		t.Fatalf("expected dashboard display key, got %q", got)
 	}
 }
 

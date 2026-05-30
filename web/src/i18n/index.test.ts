@@ -20,11 +20,18 @@ describe('i18n resources', () => {
 
   it('localizes Analysis tab and composition titles in Chinese', () => {
     expect(i18n.getResource('zh', 'translation', 'usage_stats.tab_analysis')).toBe('分析');
-    expect(i18n.getResource('zh', 'translation', 'usage_stats.analysis_auth_files_composition_title')).toBe('认证文件构成');
+    expect(i18n.getResource('zh', 'translation', 'usage_stats.analysis_api_key_cost_composition_title')).toBe('API Key 成本占比');
     expect(i18n.getResource('zh', 'translation', 'usage_stats.analysis_ai_provider_composition_title')).toBe('AI 供应商构成');
     expect(i18n.getResource('zh-TW', 'translation', 'usage_stats.tab_analysis')).toBe('分析');
-    expect(i18n.getResource('zh-TW', 'translation', 'usage_stats.analysis_auth_files_composition_title')).toBe('認證檔案組成');
+    expect(i18n.getResource('zh-TW', 'translation', 'usage_stats.analysis_api_key_cost_composition_title')).toBe('API Key 成本占比');
     expect(i18n.getResource('zh-TW', 'translation', 'usage_stats.analysis_ai_provider_composition_title')).toBe('AI 供應商組成');
+  });
+
+  it('uses concise Model Info subtitles without implementation source wording', () => {
+    expect(i18n.getResource('zh', 'translation', 'usage_stats.model_info_available_subtitle')).toBe('');
+    expect(i18n.getResource('zh', 'translation', 'usage_stats.model_info_pricing_subtitle')).toBe('缺失价格默认显示 0。');
+    expect(i18n.getResource('zh-TW', 'translation', 'usage_stats.model_info_available_subtitle')).toBe('');
+    expect(i18n.getResource('zh-TW', 'translation', 'usage_stats.model_info_pricing_subtitle')).toBe('缺少價格預設顯示 0。');
   });
 
   it('keeps the all option in the API Key filter generic across languages', () => {
@@ -69,15 +76,37 @@ describe('i18n resources', () => {
     expect(JSON.stringify(zhTW)).not.toMatch(/該 key|目前 key|完整 key|開啟 Key 總覽|API-Key|金鑰的唯讀|目前金鑰/);
   });
 
-  it('uses direct API Key error wording in every language', () => {
-    expect(i18n.getResource('en', 'translation', 'auth.invalid_api_key')).toBe('API Key is incorrect');
-    expect(i18n.getResource('zh', 'translation', 'auth.invalid_api_key')).toBe('API Key 错误');
-    expect(i18n.getResource('zh-TW', 'translation', 'auth.invalid_api_key')).toBe('API Key 錯誤');
+  it('does not keep API Key viewer or access-method auth copy', () => {
+    for (const language of SUPPORTED_LANGUAGES) {
+      expect(i18n.getResource(language, 'translation', 'auth.console_title')).toBe('');
+      expect(i18n.getResource(language, 'translation', 'auth.console_hint')).toBe('');
+      expect(i18n.getResource(language, 'translation', 'auth.login_method')).toBe('');
+      expect(i18n.getResource(language, 'translation', 'auth.api_key_tab')).toBe('');
+      expect(i18n.getResource(language, 'translation', 'auth.api_key_label')).toBe('');
+      expect(i18n.getResource(language, 'translation', 'auth.api_key_placeholder')).toBe('');
+      expect(i18n.getResource(language, 'translation', 'auth.api_key_hint')).toBe('');
+      expect(i18n.getResource(language, 'translation', 'auth.api_key_login_submit')).toBe('');
+      expect(i18n.getResource(language, 'translation', 'auth.invalid_api_key')).toBe('');
+      expect(i18n.getResource(language, 'translation', 'auth.api_key_login_failed')).toBe('');
+    }
+  });
+
+  it('does not keep API Key alias display copy', () => {
+    for (const language of SUPPORTED_LANGUAGES) {
+      expect(i18n.getResource(language, 'translation', 'usage_stats.api_key_settings_alias')).toBe('');
+      expect(i18n.getResource(language, 'translation', 'usage_stats.api_key_settings_saving')).toBe('');
+    }
   });
 
   it('keeps the login product title aligned across languages', () => {
-    expect(i18n.getResourceBundle('en', 'translation').auth.login_title).toBe('CPA Usage Statistics Dashboard');
-    expect(i18n.getResourceBundle('zh', 'translation').auth.login_title).toBe('CPA 用量统计仪表盘');
-    expect(i18n.getResourceBundle('zh-TW', 'translation').auth.login_title).toBe('CPA 用量統計儀表板');
+    expect(i18n.getResourceBundle('en', 'translation').auth.login_title).toBe('LLMAPI Usage Statistics Dashboard');
+    expect(i18n.getResourceBundle('zh', 'translation').auth.login_title).toBe('LLMAPI 用量统计仪表盘');
+    expect(i18n.getResourceBundle('zh-TW', 'translation').auth.login_title).toBe('LLMAPI 用量統計儀表板');
+  });
+
+  it('does not show login subtitle copy', () => {
+    for (const language of SUPPORTED_LANGUAGES) {
+      expect(i18n.getResource(language, 'translation', 'auth.login_subtitle')).toBe('');
+    }
   });
 });

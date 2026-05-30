@@ -156,11 +156,11 @@ func TestAuthAPIKeyLoginSetsViewerSessionCookieAndSessionSummary(t *testing.T) {
 	router.ServeHTTP(sessionResp, sessionReq)
 
 	body := sessionResp.Body.String()
-	if sessionResp.Code != http.StatusOK || !contains(body, `"authenticated":true`) || !contains(body, `"role":"api_key_viewer"`) || !contains(body, `"api_key":{"display_key":"sk-*********123456","alias":"Team Key"}`) {
+	if sessionResp.Code != http.StatusOK || !contains(body, `"authenticated":true`) || !contains(body, `"role":"api_key_viewer"`) || !contains(body, `"api_key":{"display_key":"sk-l*****************3456"}`) {
 		t.Fatalf("unexpected session response: %d %s", sessionResp.Code, body)
 	}
-	if contains(body, "sk-live123456") || contains(body, "sk-l************3456") {
-		t.Fatalf("expected session response not to expose raw API key: %s", body)
+	if contains(body, "Team Key") || contains(body, "sk-live123456") || contains(body, "sk-l************3456") {
+		t.Fatalf("expected session response not to expose alias or raw API key: %s", body)
 	}
 }
 

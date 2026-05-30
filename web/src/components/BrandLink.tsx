@@ -1,4 +1,3 @@
-import { GITHUB_REPOSITORY_URL } from '@/utils/constants';
 import styles from './BrandLink.module.scss';
 
 type BrandLinkProps = {
@@ -6,11 +5,7 @@ type BrandLinkProps = {
 };
 
 export function BrandLink({ className = '' }: BrandLinkProps) {
-  const linkClassName = `${styles.brandLink} ${className}`.trim();
+  const brandClassName = `${styles.brandLink} ${className}`.trim();
 
-  return (
-    <a className={linkClassName} href={GITHUB_REPOSITORY_URL} target="_blank" rel="noreferrer">
-      CPA Usage Keeper
-    </a>
-  );
+  return <span className={brandClassName}>LLMAPI usage</span>;
 }

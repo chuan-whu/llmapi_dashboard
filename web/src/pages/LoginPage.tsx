@@ -9,53 +9,35 @@ import type { Theme } from '@/types';
 import { BrandLink } from '@/components/BrandLink';
 import styles from './LoginPage.module.scss';
 
-type LoginMode = 'admin' | 'api_key';
-
 const THEME_OPTIONS: ReadonlyArray<{ value: Theme; labelKey: string }> = [
   { value: 'white', labelKey: 'usage_stats.theme_light' },
   { value: 'dark', labelKey: 'usage_stats.theme_dark' },
   { value: 'auto', labelKey: 'usage_stats.theme_auto' },
 ];
 
-type LoginErrors = {
+interface LoginPageProps {
   adminError?: string;
-  apiKeyError?: string;
-};
-
-interface LoginPageProps extends LoginErrors {
   loading?: boolean;
   onPasswordSubmit: (password: string) => Promise<void>;
-  onAPIKeySubmit?: (apiKey: string) => Promise<void>;
 }
 
-export const getLoginErrorForMode = (mode: LoginMode, { adminError = '', apiKeyError = '' }: LoginErrors) => (
-  mode === 'api_key' ? apiKeyError : adminError
-);
-
-export function LoginPage({ loading = false, adminError = '', apiKeyError = '', onPasswordSubmit, onAPIKeySubmit }: LoginPageProps) {
+export function LoginPage({ loading = false, adminError = '', onPasswordSubmit }: LoginPageProps) {
   const { t } = useTranslation();
   const theme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
-  const [mode, setMode] = useState<LoginMode>('admin');
   const [password, setPassword] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const activeError = getLoginErrorForMode(mode, { adminError, apiKeyError });
   const themeOptions = useMemo(
     () => THEME_OPTIONS.map((option) => ({ ...option, label: t(option.labelKey) })),
     [t]
   );
-  const effectiveMode: LoginMode = onAPIKeySubmit ? mode : 'admin';
+  const loginSubtitle = t('auth.login_subtitle');
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (effectiveMode === 'api_key' && onAPIKeySubmit) {
-      await onAPIKeySubmit(apiKey);
-      return;
-    }
     await onPasswordSubmit(password);
   };
 
-  const canSubmit = effectiveMode === 'api_key' ? Boolean(apiKey.trim()) : Boolean(password.trim());
+  const canSubmit = Boolean(password.trim());
 
   return (
     <div className={styles.pageShell}>
@@ -83,73 +65,24 @@ export function LoginPage({ loading = false, adminError = '', apiKeyError = '', 
         <div className={styles.brandBlock}>
           <BrandLink className={styles.eyebrow} />
           <h1 className={styles.title}>{t('auth.login_title')}</h1>
-          <p className={styles.subtitle}>{t('auth.login_subtitle')}</p>
+          {loginSubtitle && <p className={styles.subtitle}>{loginSubtitle}</p>}
         </div>
 
         <Card className={styles.loginCard}>
-          <div className={styles.cardHeader}>
-            <span className={styles.cardKicker}>{t('auth.console_kicker')}</span>
-            <h2 className={styles.cardTitle}>{t('auth.console_title')}</h2>
-            <p className={styles.cardHint}>{t('auth.console_hint')}</p>
-          </div>
-
-          {onAPIKeySubmit && (
-            <div className={styles.tabs} role="tablist" aria-label={t('auth.login_method')}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === 'admin'}
-              className={`${styles.tab} ${mode === 'admin' ? styles.tabActive : ''}`.trim()}
-              onClick={() => setMode('admin')}
-              disabled={loading}
-            >
-              {t('auth.admin_tab')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === 'api_key'}
-              className={`${styles.tab} ${mode === 'api_key' ? styles.tabActive : ''}`.trim()}
-              onClick={() => setMode('api_key')}
-              disabled={loading}
-            >
-              {t('auth.api_key_tab')}
-            </button>
-            </div>
-          )}
-
           <form className={styles.form} onSubmit={(event) => void handleSubmit(event)}>
-            {effectiveMode === 'api_key' ? (
-              <>
-                <Input
-                  type="password"
-                  autoComplete="off"
-                  label={t('auth.api_key_label')}
-                  placeholder={t('auth.api_key_placeholder')}
-                  value={apiKey}
-                  onChange={(event) => setApiKey(event.target.value)}
-                  error={activeError || undefined}
-                  disabled={loading}
-                />
-                <p className={styles.formHint}>{t('auth.api_key_hint')}</p>
-              </>
-            ) : (
-              <>
-                <Input
-                  type="password"
-                  autoComplete="current-password"
-                  label={t('auth.password_label')}
-                  placeholder={t('auth.password_placeholder')}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  error={activeError || undefined}
-                  disabled={loading}
-                />
-                <p className={styles.formHint}>{t('auth.password_hint')}</p>
-              </>
-            )}
+            <Input
+              type="password"
+              autoComplete="current-password"
+              label={t('auth.password_label')}
+              placeholder={t('auth.password_placeholder')}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              error={adminError || undefined}
+              disabled={loading}
+            />
+            <p className={styles.formHint}>{t('auth.password_hint')}</p>
             <Button type="submit" fullWidth loading={loading} disabled={!canSubmit}>
-              {effectiveMode === 'api_key' ? t('auth.api_key_login_submit') : t('auth.login_submit')}
+              {t('auth.login_submit')}
             </Button>
           </form>
         </Card>

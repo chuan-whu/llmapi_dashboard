@@ -10,7 +10,7 @@ import (
 
 var configEnvKeys = []string{
 	"APP_DB_PATH", "APP_PORT", "APP_BASE_PATH", "TZ",
-	"CPA_BASE_URL", "CPA_MANAGEMENT_KEY", "AUTH_ENABLED", "LOGIN_PASSWORD", "AUTH_SESSION_TTL",
+	"BASE_URL", "KEY", "CPA_BASE_URL", "CPA_MANAGEMENT_KEY", "AUTH_ENABLED", "LOGIN_PASSWORD", "AUTH_SESSION_TTL",
 	"WORK_DIR", "LOG_FILE_ENABLED", "BACKUP_ENABLED", "REDIS_QUEUE_ADDR",
 }
 
@@ -149,6 +149,20 @@ func TestLoadReadsLoginProtectionEnvVars(t *testing.T) {
 	}
 	if !cfg.AuthEnabled || cfg.LoginPassword != "secret" || cfg.AuthSessionTTL != 2*time.Hour {
 		t.Fatalf("expected login protection env vars to be applied, got %+v", cfg)
+	}
+}
+
+func TestLoadReadsAvailableModelsEnvVars(t *testing.T) {
+	t.Setenv("APP_DB_PATH", filepath.Join(t.TempDir(), "app.db"))
+	t.Setenv("BASE_URL", " https://api.openai.com/v1 ")
+	t.Setenv("KEY", " sk-test-key ")
+
+	cfg, err := LoadFromEnv()
+	if err != nil {
+		t.Fatalf("LoadFromEnv returned error: %v", err)
+	}
+	if cfg.BaseURL != "https://api.openai.com/v1" || cfg.Key != "sk-test-key" {
+		t.Fatalf("expected available model env vars to be applied, got %+v", cfg)
 	}
 }
 

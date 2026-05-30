@@ -1818,7 +1818,7 @@
 
 .apiKeySettingsItem {
   display: grid;
-  grid-template-columns: minmax(140px, 0.9fr) minmax(200px, 1.1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 14px;
   padding: 14px;
@@ -1847,55 +1847,12 @@
   word-break: break-word;
 }
 
-.apiKeySettingsMeta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  color: var(--text-tertiary);
-  font-size: 10px;
-  line-height: 1.4;
-}
-
-.apiKeySettingsForm {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.apiKeyAliasField {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.apiKeyFieldLabel,
-.apiKeyAliasLabel {
+.apiKeyFieldLabel {
   padding-left: 10px;
   color: var(--text-secondary);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
-}
-
-.apiKeyAliasInput {
-  width: 100%;
-}
-
-.apiKeySettingsActions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  align-self: stretch;
-}
-
-.apiKeySettingsSaveButton {
-  min-width: 72px;
-  min-height: 40px;
-  justify-content: center;
 }
 
 @include tablet {
@@ -1928,29 +1885,6 @@
     align-items: stretch;
     padding: 12px;
     gap: 12px;
-  }
-
-  .apiKeySettingsForm {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .apiKeyAliasField {
-    width: 100%;
-
-    :global(.form-group) {
-      width: 100%;
-      min-width: 0;
-      margin-bottom: 0;
-    }
-  }
-
-  .apiKeyAliasInput {
-    max-width: 100%;
-  }
-
-  .apiKeySettingsActions,
-  .apiKeySettingsSaveButton {
-    width: 100%;
   }
 }
 
@@ -2175,6 +2109,49 @@
   > * {
     min-width: 0;
   }
+}
+
+.modelInfoGrid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+
+  > * {
+    min-width: 0;
+  }
+
+  @include desktop {
+    grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr);
+  }
+}
+
+.modelInfoCard {
+  min-width: 0;
+}
+
+.modelInfoList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modelInfoChip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary-color) 7%, var(--bg-primary));
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.modelInfoTableWrapper {
+  overflow-x: auto;
 }
 
 .requestEventsCard:global(.card) {

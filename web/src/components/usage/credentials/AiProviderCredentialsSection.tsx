@@ -2,7 +2,8 @@ import { useTranslation } from 'react-i18next'
 import styles from './CredentialSections.module.scss'
 import type { AiProviderCredentialRow } from './credentialViewModels'
 import type { UsageIdentityPageSort } from '@/lib/api'
-import { CredentialBadge, CredentialRowShell, CredentialSectionShell, CredentialsPagination, MetricPill, RequestMetric, TonePercent, cacheRateTone, formatCredentialNumber, successRateTone } from './CredentialSectionShell'
+import { safeAiProviderAccountLabel } from '@/utils/sensitiveDisplay'
+import { CredentialRowShell, CredentialSectionShell, CredentialsPagination, MetricPill, RequestMetric, TonePercent, cacheRateTone, formatCredentialNumber, successRateTone } from './CredentialSectionShell'
 
 interface AiProviderCredentialsSectionProps {
   rows: AiProviderCredentialRow[]
@@ -29,11 +30,11 @@ export function AiProviderCredentialsSection({ rows, total, page, totalPages, pa
     >
       {loading && rows.length === 0 && <div className={styles.credentialEmptyState}>{t('common.loading')}</div>}
       {!loading && rows.length === 0 && <div className={styles.credentialEmptyState}>{t('usage_stats.credentials_ai_providers_empty')}</div>}
-      {rows.map((row) => (
+      {rows.map((row, index) => (
         <CredentialRowShell
           key={row.identity.id || row.identity.identity}
-          title={row.displayName}
-          subtitle={<CredentialBadge>{row.typeLabel}</CredentialBadge>}
+          title={safeAiProviderAccountLabel(row.displayName, index)}
+          subtitle={null}
           badges={null}
           metrics={(
             <>

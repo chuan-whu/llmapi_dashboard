@@ -32,12 +32,16 @@ describe('CredentialProviderFilterBar', () => {
     expect(html).toBe('')
   })
 
-  it('uses the AI provider Gemini label outside Auth Files', () => {
+  it('does not render real provider labels for AI provider filters', () => {
     const html = renderToStaticMarkup(
       <CredentialProviderFilterBar scope="ai-provider" typeCounts={[{ type: 'gemini', count: 1 }]} value="all" onChange={() => undefined} />,
     )
 
-    expect(html).toContain('usage_stats.credentials_filter_gemini')
+    expect(html).toContain('usage_stats.credentials_filter_all')
+    expect(html).not.toContain('usage_stats.credentials_filter_gemini')
     expect(html).not.toContain('usage_stats.credentials_filter_gemini_cli')
+    expect(html).not.toContain('usage_stats.credentials_filter_openai')
+    expect(html).not.toContain('usage_stats.credentials_filter_claude')
+    expect(html).not.toContain('usage_stats.credentials_filter_codex')
   })
 })

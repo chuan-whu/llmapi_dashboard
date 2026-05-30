@@ -25,16 +25,9 @@ const AUTH_FILE_PROVIDER_FILTERS: KnownCredentialProviderFilter[] = [
   { key: 'iflow', labelKey: 'usage_stats.credentials_filter_iflow', types: ['iflow'] },
 ]
 
-const AI_PROVIDER_FILTERS: KnownCredentialProviderFilter[] = [
-  { key: 'claude', labelKey: 'usage_stats.credentials_filter_claude', types: ['claude'] },
-  { key: 'codex', labelKey: 'usage_stats.credentials_filter_codex', types: ['codex'] },
-  { key: 'gemini', labelKey: 'usage_stats.credentials_filter_gemini', types: ['gemini'] },
-  { key: 'openai', labelKey: 'usage_stats.credentials_filter_openai', types: ['openai'] },
-]
-
 const FILTERS_BY_SCOPE: Record<CredentialProviderFilterScope, KnownCredentialProviderFilter[]> = {
   'auth-files': AUTH_FILE_PROVIDER_FILTERS,
-  'ai-provider': AI_PROVIDER_FILTERS,
+  'ai-provider': [],
 }
 
 function credentialProviderFiltersForScope(scope: CredentialProviderFilterScope): KnownCredentialProviderFilter[] {

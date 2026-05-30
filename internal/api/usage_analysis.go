@@ -20,6 +20,7 @@ type analysisResponse struct {
 	RangeEnd              *time.Time                `json:"range_end,omitempty"`
 	TokenUsage            []analysisTokenUsage      `json:"token_usage"`
 	APIKeyComposition     []analysisCompositionItem `json:"api_key_composition"`
+	APIKeyCostComposition []analysisCostItem        `json:"api_key_cost_composition"`
 	ModelComposition      []analysisCompositionItem `json:"model_composition"`
 	AuthFilesComposition  []analysisCompositionItem `json:"auth_files_composition"`
 	AIProviderComposition []analysisCompositionItem `json:"ai_provider_composition"`
@@ -42,6 +43,14 @@ type analysisCompositionItem struct {
 	TotalTokens int64   `json:"total_tokens"`
 	Requests    int64   `json:"requests"`
 	Percent     float64 `json:"percent"`
+}
+
+type analysisCostItem struct {
+	Key         string  `json:"key"`
+	Label       string  `json:"label"`
+	Cost        float64 `json:"cost"`
+	Requests    int64   `json:"requests"`
+	CostPercent float64 `json:"cost_percent"`
 }
 
 type analysisHeatmap struct {
@@ -96,6 +105,7 @@ func emptyAnalysisResponse() analysisResponse {
 		Timezone:              time.Local.String(),
 		TokenUsage:            []analysisTokenUsage{},
 		APIKeyComposition:     []analysisCompositionItem{},
+		APIKeyCostComposition: []analysisCostItem{},
 		ModelComposition:      []analysisCompositionItem{},
 		AuthFilesComposition:  []analysisCompositionItem{},
 		AIProviderComposition: []analysisCompositionItem{},
@@ -114,7 +124,7 @@ func loadCPAAPIKeyInfos(c *gin.Context, provider service.CPAAPIKeyProvider) (map
 	}
 	infos := make(map[string]analysisAPIKeyInfo, len(rows))
 	for _, row := range rows {
-		infos[row.APIKey] = analysisAPIKeyInfo{ID: row.ID, Label: helper.CPAAPIKeyDisplayName(row)}
+		infos[row.APIKey] = analysisAPIKeyInfo{ID: row.ID, Label: helper.CPAAPIKeyMaskedDisplayKey(row)}
 	}
 	return infos, nil
 }
@@ -146,6 +156,7 @@ func buildAnalysisPayload(snapshot *servicedto.AnalysisSnapshot, apiKeyInfos map
 		RangeEnd:              snapshot.RangeEnd,
 		TokenUsage:            tokenUsage,
 		APIKeyComposition:     apiComposition,
+		APIKeyCostComposition: buildAnalysisCostPayload(snapshot.APIKeyCostComposition, apiKeyInfos),
 		ModelComposition:      modelComposition,
 		AuthFilesComposition:  authFilesComposition,
 		AIProviderComposition: aiProviderComposition,
@@ -177,18 +188,42 @@ func buildAnalysisCompositionPayload(items []servicedto.AnalysisCompositionItem,
 	return payload
 }
 
+func buildAnalysisCostPayload(items []servicedto.AnalysisCostCompositionItem, apiKeyInfos map[string]analysisAPIKeyInfo) []analysisCostItem {
+	total := 0.0
+	for _, item := range items {
+		total += item.Cost
+	}
+	payload := make([]analysisCostItem, 0, len(items))
+	for _, item := range items {
+		key := helper.RedactSensitiveValue(item.Key)
+		label := item.Key
+		if apiKeyInfos != nil {
+			key = analysisAPIKeyResponseKey(item.Key, apiKeyInfos)
+			label = analysisAPIKeyLabel(item.Key, apiKeyInfos)
+		} else if item.Label != "" {
+			label = item.Label
+		}
+		percent := 0.0
+		if total > 0 {
+			percent = (item.Cost / total) * 100
+		}
+		payload = append(payload, analysisCostItem{Key: key, Label: label, Cost: item.Cost, Requests: item.Requests, CostPercent: percent})
+	}
+	return payload
+}
+
 func analysisAPIKeyResponseKey(apiKey string, apiKeyInfos map[string]analysisAPIKeyInfo) string {
 	if info, ok := apiKeyInfos[apiKey]; ok && info.ID > 0 {
 		return strconv.FormatInt(info.ID, 10)
 	}
-	return helper.RedactSensitiveValue(apiKey)
+	return helper.MaskAPIKeyForDisplay(apiKey)
 }
 
 func analysisAPIKeyLabel(apiKey string, apiKeyInfos map[string]analysisAPIKeyInfo) string {
 	if info, ok := apiKeyInfos[apiKey]; ok && info.Label != "" {
 		return info.Label
 	}
-	return helper.RedactSensitiveValue(apiKey)
+	return helper.MaskAPIKeyForDisplay(apiKey)
 }
 
 func buildAnalysisHeatmapPayload(cells []servicedto.AnalysisHeatmapCell, apiKeyInfos map[string]analysisAPIKeyInfo) analysisHeatmap {

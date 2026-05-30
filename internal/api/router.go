@@ -56,6 +56,7 @@ func NewReadOnlyRouter(
 	authConfig AuthConfig,
 	authHandler *authHandler,
 	basePath string,
+	readOnlyProviders ...any,
 ) *gin.Engine {
 	router := gin.New()
 	_ = router.SetTrustedProxies(nil)
@@ -79,11 +80,24 @@ func NewReadOnlyRouter(
 
 	protected := apiV1.Group("")
 	protected.Use(authHandler.adminMiddleware())
+	var pricingProvider service.PricingProvider
+	var availableModelsProvider service.AvailableModelsProvider
+	for _, provider := range readOnlyProviders {
+		if typed, ok := provider.(service.PricingProvider); ok {
+			pricingProvider = typed
+		}
+		if typed, ok := provider.(service.AvailableModelsProvider); ok {
+			availableModelsProvider = typed
+		}
+	}
 	registerReadOnlyStatusRoute(protected)
 	registerUsageOverviewRoute(protected, usageProvider)
 	registerUsageAnalysisRoute(protected, usageProvider, cpaAPIKeyProvider)
 	registerUsageEventsRoute(protected, usageProvider, usageIdentityProvider, cpaAPIKeyProvider)
+	registerUsageIdentityRoutes(protected, usageIdentityProvider)
 	registerCPAAPIKeyOptionRoutes(protected, cpaAPIKeyProvider)
+	registerReadOnlyPricingRoutes(protected, pricingProvider)
+	registerAvailableModelsRoutes(protected, availableModelsProvider)
 	registerStaticRoutes(router, appGroup, staticFS, basePath)
 	return router
 }

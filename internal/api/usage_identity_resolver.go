@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/helper"
 )
 
 type usageIdentityResolver struct {
@@ -15,6 +14,7 @@ type usageIdentityResolver struct {
 func newUsageIdentityResolver(identities []entities.UsageIdentity) usageIdentityResolver {
 	authFilesByIdentity := make(map[string]entities.UsageIdentity, len(identities))
 	providersByIdentity := make(map[string]entities.UsageIdentity, len(identities))
+	providerLabels := newProviderAccountLabels(identities)
 	for _, identity := range identities {
 		if identity.IsDeleted {
 			continue
@@ -27,6 +27,10 @@ func newUsageIdentityResolver(identities []entities.UsageIdentity) usageIdentity
 		case entities.UsageIdentityAuthTypeAuthFile:
 			authFilesByIdentity[key] = identity
 		case entities.UsageIdentityAuthTypeAIProvider:
+			identity.Name = providerLabels.labelFor(identity)
+			identity.Provider = ""
+			identity.Prefix = ""
+			identity.Type = ""
 			providersByIdentity[key] = identity
 		}
 	}
@@ -43,8 +47,12 @@ type resolvedUsageIdentity struct {
 }
 
 func resolvedUsageIdentityFromEntity(item entities.UsageIdentity) resolvedUsageIdentity {
+	displayName := strings.TrimSpace(item.Name)
+	if displayName == "" {
+		displayName = strings.TrimSpace(item.Identity)
+	}
 	return resolvedUsageIdentity{
-		DisplayName: helper.UsageIdentityDisplayName(item),
+		DisplayName: displayName,
 		Type:        strings.TrimSpace(item.Type),
 	}
 }

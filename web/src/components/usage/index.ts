@@ -6,6 +6,7 @@ export { ApiKeySettingsCard } from './ApiKeySettingsCard';
 export { PriceSettingsCard } from './PriceSettingsCard';
 export { AiProviderCredentialsSection, AuthFileCredentialsSection, CredentialProviderFilterBar, useCredentialsTabData } from './credentials';
 export { RequestEventsDetailsCard } from './RequestEventsDetailsCard';
+export { ModelInfoPanel } from './ModelInfoPanel';
 export { TokenBreakdownChart } from './TokenBreakdownChart';
 export { CostTrendChart } from './CostTrendChart';
 export { ServiceHealthCard } from './ServiceHealthCard';

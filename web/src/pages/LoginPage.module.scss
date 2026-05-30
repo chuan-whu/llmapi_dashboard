@@ -130,80 +130,11 @@
   }
 }
 
-.cardHeader {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-
-.cardKicker {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.cardTitle {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 24px;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-}
-
-.cardHint {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
 .formHint {
   margin: 0;
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
-}
-
-.tabs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  min-height: 44px;
-  padding: 4px;
-  margin-bottom: 18px;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: color-mix(in srgb, var(--bg-secondary) 78%, transparent);
-}
-
-.tab {
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
-
-  &:hover:not(:disabled) {
-    color: var(--text-primary);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
-  }
-}
-
-.tabActive {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.1);
 }
 
 .form {

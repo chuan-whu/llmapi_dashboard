@@ -265,6 +265,10 @@ func BuildAnalysisWithFilter(db *gorm.DB, filter dto.UsageQueryFilter) (*dto.Ana
 		return record, nil
 	}
 	if bucketByDay {
+		pricingByModel, err := loadPriceSettingsByModel(db)
+		if err != nil {
+			return nil, err
+		}
 		fullDayStart, fullDayEnd := usageOverviewFullDayWindow(fullStart, fullEnd)
 		var dailyRows []entities.UsageOverviewDailyStat
 		if fullDayEnd.After(fullDayStart) {
@@ -286,7 +290,7 @@ func BuildAnalysisWithFilter(db *gorm.DB, filter dto.UsageQueryFilter) (*dto.Ana
 		if err != nil {
 			return nil, err
 		}
-		applyAnalysisDailyAndBoundaryHourlyRows(record, dailyRows, dailyIdentityLookup, hourlyRows, hourlyIdentityLookup)
+		applyAnalysisDailyAndBoundaryHourlyRows(record, dailyRows, dailyIdentityLookup, hourlyRows, hourlyIdentityLookup, pricingByModel)
 		return record, nil
 	}
 	rows, err := loadAnalysisOverviewHourlyStatsWithFilter(db, filter, fullStart, fullEnd)
@@ -297,7 +301,11 @@ func BuildAnalysisWithFilter(db *gorm.DB, filter dto.UsageQueryFilter) (*dto.Ana
 	if err != nil {
 		return nil, err
 	}
-	applyAnalysisHourlyRows(record, rows, identityLookup)
+	pricingByModel, err := loadPriceSettingsByModel(db)
+	if err != nil {
+		return nil, err
+	}
+	applyAnalysisHourlyRows(record, rows, identityLookup, pricingByModel)
 	fillAnalysisFullDayHourlyBuckets(record, filter)
 	return record, nil
 }
@@ -376,61 +384,122 @@ func loadAnalysisIdentityLookup(db *gorm.DB, authIndexes []string) (analysisIden
 	if len(authIndexes) == 0 {
 		return lookup, nil
 	}
+	identities := make([]entities.UsageIdentity, 0, len(authIndexes))
 	for start := 0; start < len(authIndexes); start += analysisIdentityLookupBatchSize {
 		end := min(start+analysisIdentityLookupBatchSize, len(authIndexes))
-		var identities []entities.UsageIdentity
-		if err := db.Where("identity IN ? AND auth_type IN ? AND is_deleted = ?", authIndexes[start:end], []entities.UsageIdentityAuthType{entities.UsageIdentityAuthTypeAuthFile, entities.UsageIdentityAuthTypeAIProvider}, false).Find(&identities).Error; err != nil {
+		var batch []entities.UsageIdentity
+		if err := db.Where("identity IN ? AND auth_type IN ? AND is_deleted = ?", authIndexes[start:end], []entities.UsageIdentityAuthType{entities.UsageIdentityAuthTypeAuthFile, entities.UsageIdentityAuthTypeAIProvider}, false).Find(&batch).Error; err != nil {
 			return nil, fmt.Errorf("load analysis usage identities: %w", err)
 		}
-		for _, identity := range identities {
-			label := helper.UsageIdentityDisplayName(identity)
-			lookup[identity.AuthType][identity.Identity] = analysisIdentityInfo{identity: identity.Identity, label: label, authType: identity.AuthType}
+		identities = append(identities, batch...)
+	}
+	providerLabels := newAnalysisProviderAccountLabels(identities)
+	for _, identity := range identities {
+		label := helper.UsageIdentityDisplayName(identity)
+		if identity.AuthType == entities.UsageIdentityAuthTypeAIProvider {
+			label = providerLabels.labelFor(identity)
 		}
+		lookup[identity.AuthType][identity.Identity] = analysisIdentityInfo{identity: identity.Identity, label: label, authType: identity.AuthType}
 	}
 	return lookup, nil
 }
 
-func applyAnalysisHourlyRows(record *dto.AnalysisRecord, rows []entities.UsageOverviewHourlyStat, identityLookup analysisIdentityLookup) {
+type analysisProviderAccountLabels struct {
+	byIdentity map[string]string
+	byID       map[int64]string
+}
+
+func newAnalysisProviderAccountLabels(identities []entities.UsageIdentity) analysisProviderAccountLabels {
+	type entry struct {
+		id       int64
+		identity string
+	}
+	entries := make([]entry, 0, len(identities))
+	for _, identity := range identities {
+		if identity.AuthType != entities.UsageIdentityAuthTypeAIProvider || identity.IsDeleted {
+			continue
+		}
+		trimmedIdentity := strings.TrimSpace(identity.Identity)
+		if trimmedIdentity == "" {
+			continue
+		}
+		entries = append(entries, entry{id: identity.ID, identity: trimmedIdentity})
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].id == entries[j].id {
+			return entries[i].identity < entries[j].identity
+		}
+		return entries[i].id < entries[j].id
+	})
+	labels := analysisProviderAccountLabels{
+		byIdentity: make(map[string]string, len(entries)),
+		byID:       make(map[int64]string, len(entries)),
+	}
+	for index, entry := range entries {
+		label := fmt.Sprintf("AI account %d", index+1)
+		labels.byIdentity[entry.identity] = label
+		if entry.id > 0 {
+			labels.byID[entry.id] = label
+		}
+	}
+	return labels
+}
+
+func (labels analysisProviderAccountLabels) labelFor(identity entities.UsageIdentity) string {
+	if identity.ID > 0 {
+		if label, ok := labels.byID[identity.ID]; ok {
+			return label
+		}
+	}
+	if label, ok := labels.byIdentity[strings.TrimSpace(identity.Identity)]; ok {
+		return label
+	}
+	return "AI account 1"
+}
+
+func applyAnalysisHourlyRows(record *dto.AnalysisRecord, rows []entities.UsageOverviewHourlyStat, identityLookup analysisIdentityLookup, pricingByModel map[string]entities.ModelPriceSetting) {
 	bucketTotals := map[time.Time]*dto.AnalysisTokenUsageBucketRecord{}
 	apiTotals := map[string]*dto.AnalysisCompositionRecord{}
+	apiCostTotals := map[string]*dto.AnalysisCostCompositionRecord{}
 	modelTotals := map[string]*dto.AnalysisCompositionRecord{}
 	authFileTotals := map[string]*dto.AnalysisCompositionRecord{}
 	aiProviderTotals := map[string]*dto.AnalysisCompositionRecord{}
 	heatmapTotals := map[analysisHeatmapKey]*dto.AnalysisHeatmapRecord{}
 	for _, row := range rows {
 		bucket := timeutil.NormalizeStorageTime(row.BucketStart).Truncate(time.Hour)
-		applyAnalysisRow(record, bucketTotals, apiTotals, modelTotals, heatmapTotals, bucket, row.APIGroupKey, row.Model, row.RequestCount, row.InputTokens, row.OutputTokens, row.CachedTokens, row.ReasoningTokens, row.TotalTokens)
+		applyAnalysisRow(record, bucketTotals, apiTotals, apiCostTotals, modelTotals, heatmapTotals, bucket, row.APIGroupKey, row.Model, row.RequestCount, row.InputTokens, row.OutputTokens, row.CachedTokens, row.ReasoningTokens, row.TotalTokens, pricingByModel)
 		applyAnalysisIdentityComposition(identityLookup, authFileTotals, aiProviderTotals, row.AuthIndex, row.RequestCount, row.InputTokens, row.OutputTokens, row.CachedTokens, row.ReasoningTokens, row.TotalTokens)
 	}
-	finalizeAnalysisRecord(record, bucketTotals, apiTotals, modelTotals, authFileTotals, aiProviderTotals, heatmapTotals)
+	finalizeAnalysisRecord(record, bucketTotals, apiTotals, apiCostTotals, modelTotals, authFileTotals, aiProviderTotals, heatmapTotals)
 }
 
 func applyAnalysisDailyRows(record *dto.AnalysisRecord, rows []entities.UsageOverviewDailyStat, identityLookup analysisIdentityLookup) {
-	applyAnalysisDailyAndBoundaryHourlyRows(record, rows, identityLookup, nil, analysisIdentityLookup{})
+	applyAnalysisDailyAndBoundaryHourlyRows(record, rows, identityLookup, nil, analysisIdentityLookup{}, nil)
 }
 
-func applyAnalysisDailyAndBoundaryHourlyRows(record *dto.AnalysisRecord, dailyRows []entities.UsageOverviewDailyStat, dailyIdentityLookup analysisIdentityLookup, hourlyRows []entities.UsageOverviewHourlyStat, hourlyIdentityLookup analysisIdentityLookup) {
+func applyAnalysisDailyAndBoundaryHourlyRows(record *dto.AnalysisRecord, dailyRows []entities.UsageOverviewDailyStat, dailyIdentityLookup analysisIdentityLookup, hourlyRows []entities.UsageOverviewHourlyStat, hourlyIdentityLookup analysisIdentityLookup, pricingByModel map[string]entities.ModelPriceSetting) {
 	bucketTotals := map[time.Time]*dto.AnalysisTokenUsageBucketRecord{}
 	apiTotals := map[string]*dto.AnalysisCompositionRecord{}
+	apiCostTotals := map[string]*dto.AnalysisCostCompositionRecord{}
 	modelTotals := map[string]*dto.AnalysisCompositionRecord{}
 	authFileTotals := map[string]*dto.AnalysisCompositionRecord{}
 	aiProviderTotals := map[string]*dto.AnalysisCompositionRecord{}
 	heatmapTotals := map[analysisHeatmapKey]*dto.AnalysisHeatmapRecord{}
 	for _, row := range dailyRows {
 		bucket := timeutil.NormalizeStorageTime(row.BucketStart)
-		applyAnalysisRow(record, bucketTotals, apiTotals, modelTotals, heatmapTotals, bucket, row.APIGroupKey, row.Model, row.RequestCount, row.InputTokens, row.OutputTokens, row.CachedTokens, row.ReasoningTokens, row.TotalTokens)
+		applyAnalysisRow(record, bucketTotals, apiTotals, apiCostTotals, modelTotals, heatmapTotals, bucket, row.APIGroupKey, row.Model, row.RequestCount, row.InputTokens, row.OutputTokens, row.CachedTokens, row.ReasoningTokens, row.TotalTokens, pricingByModel)
 		applyAnalysisIdentityComposition(dailyIdentityLookup, authFileTotals, aiProviderTotals, row.AuthIndex, row.RequestCount, row.InputTokens, row.OutputTokens, row.CachedTokens, row.ReasoningTokens, row.TotalTokens)
 	}
 	for _, row := range hourlyRows {
 		bucketStart := timeutil.NormalizeStorageTime(row.BucketStart)
 		bucket := time.Date(bucketStart.Year(), bucketStart.Month(), bucketStart.Day(), 0, 0, 0, 0, bucketStart.Location())
-		applyAnalysisRow(record, bucketTotals, apiTotals, modelTotals, heatmapTotals, bucket, row.APIGroupKey, row.Model, row.RequestCount, row.InputTokens, row.OutputTokens, row.CachedTokens, row.ReasoningTokens, row.TotalTokens)
+		applyAnalysisRow(record, bucketTotals, apiTotals, apiCostTotals, modelTotals, heatmapTotals, bucket, row.APIGroupKey, row.Model, row.RequestCount, row.InputTokens, row.OutputTokens, row.CachedTokens, row.ReasoningTokens, row.TotalTokens, pricingByModel)
 		applyAnalysisIdentityComposition(hourlyIdentityLookup, authFileTotals, aiProviderTotals, row.AuthIndex, row.RequestCount, row.InputTokens, row.OutputTokens, row.CachedTokens, row.ReasoningTokens, row.TotalTokens)
 	}
-	finalizeAnalysisRecord(record, bucketTotals, apiTotals, modelTotals, authFileTotals, aiProviderTotals, heatmapTotals)
+	finalizeAnalysisRecord(record, bucketTotals, apiTotals, apiCostTotals, modelTotals, authFileTotals, aiProviderTotals, heatmapTotals)
 }
 
-func applyAnalysisRow(_ *dto.AnalysisRecord, bucketTotals map[time.Time]*dto.AnalysisTokenUsageBucketRecord, apiTotals, modelTotals map[string]*dto.AnalysisCompositionRecord, heatmapTotals map[analysisHeatmapKey]*dto.AnalysisHeatmapRecord, bucket time.Time, apiGroupKey, model string, requests, inputTokens, outputTokens, cachedTokens, reasoningTokens, totalTokens int64) {
+func applyAnalysisRow(_ *dto.AnalysisRecord, bucketTotals map[time.Time]*dto.AnalysisTokenUsageBucketRecord, apiTotals map[string]*dto.AnalysisCompositionRecord, apiCostTotals map[string]*dto.AnalysisCostCompositionRecord, modelTotals map[string]*dto.AnalysisCompositionRecord, heatmapTotals map[analysisHeatmapKey]*dto.AnalysisHeatmapRecord, bucket time.Time, apiGroupKey, model string, requests, inputTokens, outputTokens, cachedTokens, reasoningTokens, totalTokens int64, pricingByModel map[string]entities.ModelPriceSetting) {
 	apiKey := normalizeUsageOverviewDimension(apiGroupKey)
 	modelName := normalizeUsageOverviewDimension(model)
 	bucketTotal := bucketTotals[bucket]
@@ -451,6 +520,7 @@ func applyAnalysisRow(_ *dto.AnalysisRecord, bucketTotals map[time.Time]*dto.Ana
 		apiTotals[apiKey] = apiTotal
 	}
 	applyAnalysisCompositionTotals(apiTotal, requests, inputTokens, outputTokens, cachedTokens, reasoningTokens, totalTokens)
+	applyAnalysisCostCompositionTotal(apiCostTotals, apiKey, modelName, requests, inputTokens, outputTokens, cachedTokens, pricingByModel)
 
 	modelTotal := modelTotals[modelName]
 	if modelTotal == nil {
@@ -467,6 +537,31 @@ func applyAnalysisRow(_ *dto.AnalysisRecord, bucketTotals map[time.Time]*dto.Ana
 	}
 	heatmapTotal.Requests += requests
 	heatmapTotal.TotalTokens += totalTokens
+}
+
+func applyAnalysisCostCompositionTotal(totals map[string]*dto.AnalysisCostCompositionRecord, apiKey, model string, requests, inputTokens, outputTokens, cachedTokens int64, pricingByModel map[string]entities.ModelPriceSetting) {
+	if pricingByModel == nil {
+		return
+	}
+	pricing, ok := pricingByModel[strings.TrimSpace(model)]
+	if !ok {
+		return
+	}
+	cost := helper.CalculateUsageTokenCost(helper.UsageTokenCostInput{
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+		CachedTokens: cachedTokens,
+	}, pricing)
+	if cost == 0 {
+		return
+	}
+	item := totals[apiKey]
+	if item == nil {
+		item = &dto.AnalysisCostCompositionRecord{Key: apiKey}
+		totals[apiKey] = item
+	}
+	item.Cost += cost
+	item.Requests += requests
 }
 
 func applyAnalysisCompositionTotals(item *dto.AnalysisCompositionRecord, requests, inputTokens, outputTokens, cachedTokens, reasoningTokens, totalTokens int64) {
@@ -532,7 +627,7 @@ func fillAnalysisFullDayHourlyBuckets(record *dto.AnalysisRecord, filter dto.Usa
 	}
 }
 
-func finalizeAnalysisRecord(record *dto.AnalysisRecord, bucketTotals map[time.Time]*dto.AnalysisTokenUsageBucketRecord, apiTotals, modelTotals, authFileTotals, aiProviderTotals map[string]*dto.AnalysisCompositionRecord, heatmapTotals map[analysisHeatmapKey]*dto.AnalysisHeatmapRecord) {
+func finalizeAnalysisRecord(record *dto.AnalysisRecord, bucketTotals map[time.Time]*dto.AnalysisTokenUsageBucketRecord, apiTotals map[string]*dto.AnalysisCompositionRecord, apiCostTotals map[string]*dto.AnalysisCostCompositionRecord, modelTotals, authFileTotals, aiProviderTotals map[string]*dto.AnalysisCompositionRecord, heatmapTotals map[analysisHeatmapKey]*dto.AnalysisHeatmapRecord) {
 	for _, bucket := range bucketTotals {
 		record.TokenUsage = append(record.TokenUsage, *bucket)
 	}
@@ -541,6 +636,10 @@ func finalizeAnalysisRecord(record *dto.AnalysisRecord, bucketTotals map[time.Ti
 		record.APIKeyComposition = append(record.APIKeyComposition, *item)
 	}
 	sortAnalysisComposition(record.APIKeyComposition)
+	for _, item := range apiCostTotals {
+		record.APIKeyCostComposition = append(record.APIKeyCostComposition, *item)
+	}
+	sortAnalysisCostComposition(record.APIKeyCostComposition)
 	for _, item := range modelTotals {
 		record.ModelComposition = append(record.ModelComposition, *item)
 	}
@@ -570,6 +669,15 @@ func sortAnalysisComposition(items []dto.AnalysisCompositionRecord) {
 			return items[i].Key < items[j].Key
 		}
 		return items[i].TotalTokens > items[j].TotalTokens
+	})
+}
+
+func sortAnalysisCostComposition(items []dto.AnalysisCostCompositionRecord) {
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Cost == items[j].Cost {
+			return items[i].Key < items[j].Key
+		}
+		return items[i].Cost > items[j].Cost
 	})
 }
 

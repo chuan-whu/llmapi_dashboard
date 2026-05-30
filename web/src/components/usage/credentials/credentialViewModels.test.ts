@@ -231,13 +231,17 @@ describe('credentialViewModels', () => {
     expect(rows[0].extraQuota[0].label).toBe('Window')
   })
 
-  it('builds AI provider rows without quota data', () => {
+  it('builds AI provider rows without exposing provider details or raw identities', () => {
     const rows = buildAiProviderCredentialRows([
-      identity({ auth_type: 2, identity: 'sk-a***1234', displayName: 'Claude API', total_requests: 4, success_count: 3, failure_count: 1 }),
+      identity({ id: '1', auth_type: 2, identity: 'sk-live-secret-value', name: 'OpenAI Primary', displayName: 'Claude API', type: 'openai', provider: 'OpenAI', auth_type_name: 'apikey', total_requests: 4, success_count: 3, failure_count: 1 }),
+      identity({ id: '2', auth_type: 2, identity: 'sk-backup-secret-value', name: 'codex account 1', displayName: 'Codex Backup', type: 'codex', provider: 'Codex' }),
     ])
 
-    expect(rows[0].displayName).toBe('Claude API')
-    expect(rows[0].maskedIdentity).toBe('sk-a***1234')
+    expect(rows.map((row) => row.displayName)).toEqual(['AI account 1', 'AI account 2'])
+    expect(rows.map((row) => row.maskedIdentity)).toEqual(['AI account 1', 'AI account 2'])
+    expect(rows.map((row) => row.providerLabel)).toEqual(['-', '-'])
+    expect(rows.map((row) => row.typeLabel)).toEqual(['-', '-'])
+    expect(rows.map((row) => row.authTypeLabel)).toEqual(['-', '-'])
     expect(rows[0].totalRequests).toBe(4)
     expect(rows[0].successCount).toBe(3)
     expect(rows[0].failureCount).toBe(1)
@@ -245,5 +249,6 @@ describe('credentialViewModels', () => {
     expect(rows[0].totalTokens).toBe(0)
     expect(rows[0].cacheRate).toBeNull()
     expect('primaryQuota' in rows[0]).toBe(false)
+    expect(JSON.stringify(rows.map(({ displayName, maskedIdentity, providerLabel, typeLabel, authTypeLabel }) => ({ displayName, maskedIdentity, providerLabel, typeLabel, authTypeLabel })))).not.toMatch(/OpenAI|Claude|Codex|openai|codex|sk-live|sk-backup/)
   })
 })

@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import type { Chart, ChartData, ChartOptions, Plugin, TooltipModel } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import type { AnalysisCompositionItem, AnalysisHeatmapCell, AnalysisResponse, AnalysisTokenUsageBucket } from '@/lib/types';
-import { calculateDisplayInputTokens, calculateDisplayOutputTokens, formatCompactNumber } from '@/utils/usage';
+import { calculateDisplayInputTokens, calculateDisplayOutputTokens, formatCompactNumber, formatUsd } from '@/utils/usage';
+import { safeAiProviderAccountLabel, safeApiKeyDisplayLabel } from '@/utils/sensitiveDisplay';
 import styles from './AnalysisPanel.module.scss';
 
 interface AnalysisPanelProps {
@@ -38,6 +39,13 @@ type ChartTheme = {
 type LegendItem = {
   label: string;
   color: string;
+};
+
+type CompositionChartItem = {
+  key: string;
+  label: string;
+  value: number;
+  percent: number;
 };
 
 type GradientColor = {
@@ -213,6 +221,33 @@ function takeMajorComposition(items: AnalysisCompositionItem[], othersLabel: str
   ];
 }
 
+function takeMajorCostComposition(items: NonNullable<AnalysisResponse['api_key_cost_composition']>, othersLabel: string, limit = 5): CompositionChartItem[] {
+  const normalized = items.map((item) => ({
+    key: item.key,
+    label: item.label,
+    value: toNumber(item.cost),
+    percent: toNumber(item.cost_percent),
+  }));
+  if (normalized.length <= limit) return normalized;
+  const major = normalized.slice(0, limit);
+  const rest = normalized.slice(limit).reduce(
+    (sum, item) => ({
+      value: sum.value + toNumber(item.value),
+    }),
+    { value: 0 },
+  );
+  const total = normalized.reduce((sum, item) => sum + toNumber(item.value), 0);
+  return [
+    ...major,
+    {
+      key: '__others__',
+      label: othersLabel,
+      value: rest.value,
+      percent: total > 0 ? (rest.value / total) * 100 : 0,
+    },
+  ];
+}
+
 function buildTokenLegendItems(labels: TokenLabels): LegendItem[] {
   return [
     { label: labels.input, color: TOKEN_COLORS.input.base },
@@ -308,11 +343,41 @@ function buildAnalysisTokenChartData(rows: ChartRow[], labels: TokenLabels): Cha
   };
 }
 
-function buildCompositionChartData(items: AnalysisCompositionItem[]): ChartData<'doughnut', number[], string> {
+function buildCompositionChartItems(items: AnalysisCompositionItem[]): CompositionChartItem[] {
+  return items.map((item) => ({
+    key: item.key,
+    label: item.label,
+    value: toNumber(item.total_tokens),
+    percent: toNumber(item.percent),
+  }));
+}
+
+function sanitizeApiKeyCompositionItems(items: AnalysisCompositionItem[]): AnalysisCompositionItem[] {
+  return items.map((item) => ({
+    ...item,
+    label: safeApiKeyDisplayLabel(item.label, safeApiKeyDisplayLabel(item.key)),
+  }));
+}
+
+function sanitizeApiKeyCostCompositionItems(items: NonNullable<AnalysisResponse['api_key_cost_composition']>): NonNullable<AnalysisResponse['api_key_cost_composition']> {
+  return items.map((item) => ({
+    ...item,
+    label: safeApiKeyDisplayLabel(item.label, safeApiKeyDisplayLabel(item.key)),
+  }));
+}
+
+function sanitizeAiProviderCompositionItems(items: AnalysisCompositionItem[]): AnalysisCompositionItem[] {
+  return items.map((item, index) => ({
+    ...item,
+    label: safeAiProviderAccountLabel(item.label, index),
+  }));
+}
+
+function buildCompositionChartData(items: CompositionChartItem[]): ChartData<'doughnut', number[], string> {
   return {
     labels: items.map((item) => item.label),
     datasets: [{
-      data: items.map((item) => toNumber(item.total_tokens)),
+      data: items.map((item) => toNumber(item.value)),
       backgroundColor: (context) => toGradientFill(context, CHART_COLORS[context.dataIndex % CHART_COLORS.length]),
       borderColor: 'transparent',
       borderWidth: 0,
@@ -384,7 +449,7 @@ function createCompositionTooltipHandler(chartTheme: ChartTheme): (args: { chart
   };
 }
 
-function buildCompositionChartOptions(chartTheme: ChartTheme): ChartOptions<'doughnut'> {
+function buildCompositionChartOptions(chartTheme: ChartTheme, formatValue: (value: number) => string): ChartOptions<'doughnut'> {
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -403,7 +468,7 @@ function buildCompositionChartOptions(chartTheme: ChartTheme): ChartOptions<'dou
         displayColors: true,
         usePointStyle: true,
         callbacks: {
-          label: (context) => formatCompactNumber(Number(context.parsed ?? 0)),
+          label: (context) => formatValue(Number(context.parsed ?? 0)),
         },
       },
     },
@@ -460,11 +525,11 @@ function TokenUsageChart({ rows, loading, isDark, isMobile }: { rows: ChartRow[]
   );
 }
 
-function CompositionDonutChart({ title, items, loading, isDark }: { title: string; items: AnalysisCompositionItem[]; loading: boolean; isDark: boolean }) {
+function CompositionDonutChart({ title, items, loading, isDark, formatValue = formatCompactNumber }: { title: string; items: CompositionChartItem[]; loading: boolean; isDark: boolean; formatValue?: (value: number) => string }) {
   const { t } = useTranslation();
   const chartTheme = useMemo(() => getChartTheme(isDark), [isDark]);
   const chartData = useMemo(() => buildCompositionChartData(items), [items]);
-  const chartOptions = useMemo(() => buildCompositionChartOptions(chartTheme), [chartTheme]);
+  const chartOptions = useMemo(() => buildCompositionChartOptions(chartTheme, formatValue), [chartTheme, formatValue]);
   return (
     <section className={styles.analysisCard}>
       <div className={styles.cardHeader}>
@@ -502,6 +567,7 @@ function CompositionDonutChart({ title, items, loading, isDark }: { title: strin
 function Heatmap({ cells, apiKeys, models, loading }: { cells: AnalysisHeatmapCell[]; apiKeys: string[]; models: string[]; loading: boolean }) {
   const { t } = useTranslation();
   const cellMap = useMemo(() => new Map(cells.map((cell) => [`${cell.api_key}\0${cell.model}`, cell])), [cells]);
+  const safeApiKeyLabels = useMemo(() => new Map(apiKeys.map((apiKey) => [apiKey, safeApiKeyDisplayLabel(apiKey)])), [apiKeys]);
   const maxHeatmapTokens = useMemo(() => Math.max(0, ...cells.map((cell) => toNumber(cell.total_tokens))), [cells]);
   return (
     <section className={`${styles.analysisCard} ${styles.heatmapCard}`}>
@@ -528,8 +594,8 @@ function Heatmap({ cells, apiKeys, models, loading }: { cells: AnalysisHeatmapCe
                 ))}
                 {apiKeys.map((apiKey) => (
                   <div key={apiKey} className={styles.heatmapRowContents}>
-                    <div className={`${styles.heatmapRowLabel} ${styles.heatmapTooltipTarget}`} data-full-name={apiKey}>
-                      <span className={styles.heatmapTruncatedLabel}>{apiKey}</span>
+                    <div className={`${styles.heatmapRowLabel} ${styles.heatmapTooltipTarget}`} data-full-name={safeApiKeyLabels.get(apiKey) ?? '-'}>
+                      <span className={styles.heatmapTruncatedLabel}>{safeApiKeyLabels.get(apiKey) ?? '-'}</span>
                     </div>
                     {models.map((model) => {
                       const cell = cellMap.get(`${apiKey}\0${model}`);
@@ -575,10 +641,10 @@ function Heatmap({ cells, apiKeys, models, loading }: { cells: AnalysisHeatmapCe
 export function AnalysisPanel({ analysis, loading, isDark, isMobile }: AnalysisPanelProps) {
   const { t } = useTranslation();
   const tokenRows = useMemo(() => buildTokenUsageRows(analysis?.token_usage ?? [], analysis?.granularity ?? 'hourly'), [analysis]);
-  const apiComposition = useMemo(() => takeMajorComposition(analysis?.api_key_composition ?? [], t('usage_stats.analysis_others')), [analysis, t]);
-  const modelComposition = useMemo(() => takeMajorComposition(analysis?.model_composition ?? [], t('usage_stats.analysis_others')), [analysis, t]);
-  const authFilesComposition = useMemo(() => takeMajorComposition(analysis?.auth_files_composition ?? [], t('usage_stats.analysis_others')), [analysis, t]);
-  const aiProviderComposition = useMemo(() => takeMajorComposition(analysis?.ai_provider_composition ?? [], t('usage_stats.analysis_others')), [analysis, t]);
+  const apiComposition = useMemo(() => buildCompositionChartItems(takeMajorComposition(sanitizeApiKeyCompositionItems(analysis?.api_key_composition ?? []), t('usage_stats.analysis_others'))), [analysis, t]);
+  const modelComposition = useMemo(() => buildCompositionChartItems(takeMajorComposition(analysis?.model_composition ?? [], t('usage_stats.analysis_others'))), [analysis, t]);
+  const apiKeyCostComposition = useMemo(() => takeMajorCostComposition(sanitizeApiKeyCostCompositionItems(analysis?.api_key_cost_composition ?? []), t('usage_stats.analysis_others')), [analysis, t]);
+  const aiProviderComposition = useMemo(() => buildCompositionChartItems(takeMajorComposition(sanitizeAiProviderCompositionItems(analysis?.ai_provider_composition ?? []), t('usage_stats.analysis_others'))), [analysis, t]);
 
   return (
     <div className={styles.analysisPanel}>
@@ -586,7 +652,7 @@ export function AnalysisPanel({ analysis, loading, isDark, isMobile }: AnalysisP
       <div className={styles.compositionGrid}>
         <CompositionDonutChart title={t('usage_stats.analysis_api_key_composition_title')} items={apiComposition} loading={loading} isDark={isDark} />
         <CompositionDonutChart title={t('usage_stats.analysis_model_composition_title')} items={modelComposition} loading={loading} isDark={isDark} />
-        <CompositionDonutChart title={t('usage_stats.analysis_auth_files_composition_title')} items={authFilesComposition} loading={loading} isDark={isDark} />
+        <CompositionDonutChart title={t('usage_stats.analysis_api_key_cost_composition_title')} items={apiKeyCostComposition} loading={loading} isDark={isDark} formatValue={formatUsd} />
         <CompositionDonutChart title={t('usage_stats.analysis_ai_provider_composition_title')} items={aiProviderComposition} loading={loading} isDark={isDark} />
       </div>
       <Heatmap cells={analysis?.heatmap.cells ?? []} apiKeys={analysis?.heatmap.api_keys ?? []} models={analysis?.heatmap.models ?? []} loading={loading} />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildChartData, calculateCacheRate, calculateCost, getOverviewModelNames, resolveUsageFilterWindow, sanitizeChartLines } from '@/utils/usage';
+import { buildChartData, calculateCacheRate, calculateCost, formatUsd, getOverviewModelNames, resolveUsageFilterWindow, sanitizeChartLines } from '@/utils/usage';
 
 describe('buildChartData', () => {
   it('uses overview bucket maps directly for daily chart labels', () => {
@@ -147,6 +147,13 @@ describe('calculateCost', () => {
       prices,
     );
     expect(cost).toBeGreaterThan(0);
+  });
+});
+
+describe('formatUsd', () => {
+  it('uses a plain dollar prefix without locale-specific US$ text', () => {
+    expect(formatUsd(0.1284)).toBe('$0.1284');
+    expect(formatUsd(12.3)).toBe('$12.30');
   });
 });
 

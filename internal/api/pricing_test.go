@@ -142,3 +142,53 @@ func TestDeletePricingRoute(t *testing.T) {
 		t.Fatalf("expected model to be deleted, got %q", provider.deleted)
 	}
 }
+
+func TestReadOnlyPricingRoutesExposeOnlyGetEndpoints(t *testing.T) {
+	router := NewReadOnlyRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", &pricingStub{
+		pricing: []entities.ModelPriceSetting{{
+			Model:                "gpt-5",
+			PromptPricePer1M:     1.25,
+			CompletionPricePer1M: 5.5,
+			CachePricePer1M:      0.2,
+		}},
+	}, staticAvailableModelsFetcher{models: []string{"gpt-5", "gpt-5-mini"}})
+
+	pricingReq := httptest.NewRequest(http.MethodGet, "/api/v1/pricing", nil)
+	pricingResp := httptest.NewRecorder()
+	router.ServeHTTP(pricingResp, pricingReq)
+	if pricingResp.Code != http.StatusOK || !contains(pricingResp.Body.String(), `"model":"gpt-5"`) || !contains(pricingResp.Body.String(), `"prompt_price_per_1m":1.25`) {
+		t.Fatalf("unexpected read-only pricing response: %d %s", pricingResp.Code, pricingResp.Body.String())
+	}
+
+	modelsReq := httptest.NewRequest(http.MethodGet, "/api/v1/models/available", nil)
+	modelsResp := httptest.NewRecorder()
+	router.ServeHTTP(modelsResp, modelsReq)
+	if modelsResp.Code != http.StatusOK || modelsResp.Body.String() != `{"models":["gpt-5","gpt-5-mini"]}` {
+		t.Fatalf("unexpected available models response: %d %s", modelsResp.Code, modelsResp.Body.String())
+	}
+
+	for _, testCase := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodPut, path: "/api/v1/pricing"},
+		{method: http.MethodPut, path: "/api/v1/pricing/gpt-5"},
+		{method: http.MethodDelete, path: "/api/v1/pricing?model=gpt-5"},
+	} {
+		resp := httptest.NewRecorder()
+		req := httptest.NewRequest(testCase.method, testCase.path, strings.NewReader(`{"model":"gpt-5"}`))
+		router.ServeHTTP(resp, req)
+		if resp.Code != http.StatusNotFound {
+			t.Fatalf("%s %s expected 404 in read-only router, got %d %s", testCase.method, testCase.path, resp.Code, resp.Body.String())
+		}
+	}
+}
+
+type staticAvailableModelsFetcher struct {
+	models []string
+	err    error
+}
+
+func (s staticAvailableModelsFetcher) FetchAvailableModels(context.Context) ([]string, error) {
+	return s.models, s.err
+}

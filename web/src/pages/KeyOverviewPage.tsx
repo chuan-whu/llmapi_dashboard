@@ -32,6 +32,7 @@ import {
   getOverviewHourWindowHours,
   getPreferredOverviewChartPeriod,
 } from '@/utils/usage/overview';
+import { safeApiKeyDisplayLabel } from '@/utils/sensitiveDisplay';
 import type { Theme } from '@/types';
 import styles from './KeyOverviewPage.module.scss';
 
@@ -296,7 +297,7 @@ export function KeyOverviewPage({ apiKey, onAuthRequired }: KeyOverviewPageProps
     }
   }, [onAuthRequired]);
 
-  const identityLabel = apiKey?.display_key || t('key_overview.identity_unknown');
+  const identityLabel = safeApiKeyDisplayLabel(apiKey?.display_key, t('key_overview.identity_unknown'));
   const displayError = error === 'KEY_OVERVIEW_RATE_LIMITED'
     ? t('key_overview.rate_limited')
     : error === 'KEY_OVERVIEW_LOAD_FAILED'

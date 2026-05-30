@@ -1,24 +1,34 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { getLoginErrorForMode } from './LoginPage';
 
 const source = readFileSync(new URL('./LoginPage.tsx', import.meta.url), 'utf8');
 const stylesSource = readFileSync(new URL('./LoginPage.module.scss', import.meta.url), 'utf8');
 
-describe('LoginPage mode-specific errors', () => {
-  it('shows only the active login mode error', () => {
-    expect(getLoginErrorForMode('admin', { adminError: 'bad password', apiKeyError: 'bad api key' })).toBe('bad password');
-    expect(getLoginErrorForMode('api_key', { adminError: 'bad password', apiKeyError: 'bad api key' })).toBe('bad api key');
+describe('LoginPage password-only login', () => {
+  it('submits only the admin password login flow', () => {
+    expect(source).toContain('onPasswordSubmit(password)');
+    expect(source).toContain("label={t('auth.password_label')}");
+    expect(source).toContain('adminError || undefined');
+    expect(source).not.toContain('onAPIKeySubmit');
+    expect(source).not.toContain('apiKey');
+    expect(source).not.toContain('LoginMode');
+    expect(source).not.toContain('getLoginErrorForMode');
   });
 
-  it('does not leak API Key failures onto the admin tab or admin failures onto the API Key tab', () => {
-    expect(getLoginErrorForMode('admin', { adminError: '', apiKeyError: 'bad api key' })).toBe('');
-    expect(getLoginErrorForMode('api_key', { adminError: 'bad password', apiKeyError: '' })).toBe('');
+  it('does not render access method or API Key viewer controls', () => {
+    expect(source).not.toContain('auth.login_method');
+    expect(source).not.toContain('auth.api_key_label');
+    expect(source).not.toContain('auth.api_key_tab');
+    expect(source).not.toContain('auth.api_key_login_submit');
+    expect(source).not.toContain('styles.tabs');
+    expect(source).not.toContain('auth.console_title');
+    expect(source).not.toContain('auth.console_hint');
   });
 
-  it('keeps the login hero concise and exposes theme switching', () => {
+  it('keeps the login hero concise, hides an empty subtitle, and exposes theme switching', () => {
     expect(source).toContain('styles.themeSwitcher');
     expect(source).toContain('useThemeStore');
+    expect(source).toContain('loginSubtitle &&');
     expect(source).not.toContain('capabilityGrid');
     expect(source).not.toContain('capability_persistence');
   });

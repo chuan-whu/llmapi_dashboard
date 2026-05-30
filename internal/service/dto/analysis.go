@@ -30,6 +30,13 @@ type AnalysisCompositionItem struct {
 	ReasoningTokens int64
 }
 
+type AnalysisCostCompositionItem struct {
+	Key      string
+	Label    string
+	Cost     float64
+	Requests int64
+}
+
 type AnalysisHeatmapCell struct {
 	APIKey      string
 	Model       string
@@ -43,6 +50,7 @@ type AnalysisSnapshot struct {
 	RangeEnd              *time.Time
 	TokenUsage            []AnalysisTokenUsageBucket
 	APIKeyComposition     []AnalysisCompositionItem
+	APIKeyCostComposition []AnalysisCostCompositionItem
 	ModelComposition      []AnalysisCompositionItem
 	AuthFilesComposition  []AnalysisCompositionItem
 	AIProviderComposition []AnalysisCompositionItem

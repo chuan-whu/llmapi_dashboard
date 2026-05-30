@@ -10,6 +10,7 @@ import {
   getPreferredOverviewChartPeriod,
   getTimeRangeOptions,
   getUsageTabOptions,
+  getApiKeySelectOptions,
   isCustomDateWithinBounds,
   isUsagePageVisible,
   normalizeUsageTabValue,
@@ -23,6 +24,7 @@ import {
   shouldShowApiKeyFilter,
   shouldShowRangeControls,
   shouldShowUpdateCheckButton,
+  pricingEntriesToModelPriceMap,
 } from './UsagePage';
 import type { UsageFilterWindow } from '@/lib/types';
 
@@ -47,32 +49,80 @@ afterEach(() => {
 });
 
 describe('UsagePage read-only dashboard scope', () => {
-  it('keeps only Overview, Analysis, and Request Events tabs', () => {
+  it('keeps the read-only dashboard tabs in the requested order', () => {
     const labels = getUsageTabOptions((key) => `translated:${key}`);
 
-    expect(labels.map((option) => option.value)).toEqual(['overview', 'analysis', 'events']);
+    expect(labels.map((option) => option.value)).toEqual(['overview', 'analysis', 'events', 'ai-provider', 'model-info']);
     expect(labels.map((option) => option.label)).toEqual([
       'translated:usage_stats.tab_overview',
       'translated:usage_stats.tab_analysis',
       'translated:usage_stats.tab_events',
+      'translated:usage_stats.tab_ai_provider',
+      'translated:usage_stats.tab_model_info',
     ]);
   });
 
-  it('does not expose credential sections, pricing preload, update checks, or CPA links', () => {
+  it('exposes only the anonymized AI provider credential section', () => {
+    expect(getCredentialSectionVisibility('ai-provider')).toEqual({
+      enabled: true,
+      showAuthFiles: false,
+      showAiProvider: true,
+    });
     expect(getCredentialSectionVisibility('auth-files')).toEqual({
       enabled: false,
       showAuthFiles: false,
       showAiProvider: false,
     });
-    expect(shouldLoadPricingOnUsageTabEntry()).toBe(false);
+    expect(shouldLoadPricingOnUsageTabEntry('model-info')).toBe(true);
+    expect(shouldLoadPricingOnUsageTabEntry('events')).toBe(true);
     expect(shouldShowUpdateCheckButton()).toBe(false);
     expect(getBackToCPALinkURL()).toBe('');
   });
 
   it('normalizes unknown and removed tab values to the default fallback path', () => {
     expect(normalizeUsageTabValue('overview')).toBe('overview');
+    expect(normalizeUsageTabValue('ai-provider')).toBe('ai-provider');
+    expect(normalizeUsageTabValue('model-info')).toBe('model-info');
     expect(normalizeUsageTabValue('credentials')).toBeNull();
     expect(normalizeUsageTabValue('settings')).toBeNull();
+  });
+});
+
+describe('UsagePage model price mapping', () => {
+  it('maps app.db pricing rows into request-event cost inputs', () => {
+    expect(pricingEntriesToModelPriceMap([
+      {
+        model: 'claude-sonnet',
+        prompt_price_per_1m: 3,
+        completion_price_per_1m: 15,
+        cache_price_per_1m: 0.3,
+      },
+      {
+        model: ' ',
+        prompt_price_per_1m: 1,
+        completion_price_per_1m: 1,
+        cache_price_per_1m: 1,
+      },
+    ])).toEqual({
+      'claude-sonnet': { prompt: 3, completion: 15, cache: 0.3 },
+    });
+  });
+});
+
+describe('UsagePage API Key filter labels', () => {
+  it('masks raw API keys and suppresses aliases in filter options', () => {
+    const options = getApiKeySelectOptions([
+      { id: '1', label: 'sk-live-secret-value-1234567890' },
+      { id: '2', label: 'Production Alias' },
+      { id: '3', label: 'sk-a*****************3456' },
+    ], (key) => key === 'usage_stats.api_key_filter_all' ? 'All' : key);
+
+    expect(options[0]).toEqual({ value: '', label: 'All' });
+    expect(options[1].label).toMatch(/^sk-l\*+7890$/);
+    expect(options[2]).toEqual({ value: '2', label: 'API Key 2' });
+    expect(options[3]).toEqual({ value: '3', label: 'sk-a*****************3456' });
+    expect(JSON.stringify(options)).not.toContain('sk-live-secret-value-1234567890');
+    expect(JSON.stringify(options)).not.toContain('Production Alias');
   });
 });
 
@@ -159,6 +209,13 @@ for (const tab of ['overview', 'analysis', 'events'] as const) {
   it(`shows range and API Key filters for ${tab}`, () => {
     expect(shouldShowRangeControls(tab)).toBe(true);
     expect(shouldShowApiKeyFilter(tab)).toBe(true);
+  });
+}
+
+for (const tab of ['ai-provider', 'model-info'] as const) {
+  it(`hides range and API Key filters for ${tab}`, () => {
+    expect(shouldShowRangeControls(tab)).toBe(false);
+    expect(shouldShowApiKeyFilter(tab)).toBe(false);
   });
 }
 

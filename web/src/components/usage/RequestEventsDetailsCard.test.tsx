@@ -8,13 +8,12 @@ const events: UsageEvent[] = [
   {
     id: '101',
     timestamp: '2026-04-23T02:00:00.000Z',
-    api_key: 'Production Key',
+    api_key: 'sk-l*****************3456',
     model: 'claude-sonnet',
     reasoning_effort: 'medium',
     endpoint: 'POST /v1/messages',
-    source: 'Provider A',
+    source: 'AI account 1',
     source_raw: 'source-a',
-    source_type: 'openai',
     auth_index: '1',
     failed: false,
     latency_ms: 120,
@@ -40,7 +39,7 @@ const renderCard = (props: Partial<React.ComponentProps<typeof RequestEventsDeta
       totalCount={120}
       totalPages={6}
       modelOptions={['claude-sonnet', 'claude-opus']}
-      sourceOptions={[{ value: 'source-a', label: 'Provider A' }, { value: 'source-b', label: 'Provider B' }]}
+      sourceOptions={[{ value: 'source-a', label: 'AI account 1' }, { value: 'source-b', label: 'AI account 2' }]}
       modelFilter="__all__"
       sourceFilter="__all__"
       resultFilter="__all__"
@@ -72,7 +71,7 @@ describe('RequestEventsDetailsCard pagination', () => {
     expect(html.indexOf('<th title="Using latency_ms in ms">Latency</th>')).toBeLessThan(html.indexOf('<th>Type</th>'));
     expect(html.indexOf('<th>Type</th>')).toBeLessThan(html.indexOf('<th>Endpoint</th>'));
     expect(html).toContain('class="_requestEventsAPIKeyCell_');
-    expect(html).toContain('title="Production Key">Production Key</td>');
+    expect(html).toContain('title="sk-l*****************3456">sk-l*****************3456</td>');
     expect(html).toContain('<td>medium</td>');
     expect(html).toMatch(/<td>SSE<\/td><td class="[^"]*requestEventsEndpointCell[^"]*" title="\/messages">\/messages<\/td>/);
     expect(html.indexOf('>45ms</td>')).toBeLessThan(html.indexOf('>120ms</td>'));
@@ -160,7 +159,7 @@ describe('RequestEventsDetailsCard pagination', () => {
     expect(html).toContain('<td>0</td><td>60</td><td>20</td><td>25</td><td>-</td><td>200</td>');
   });
 
-  it('stacks source value above source tags', () => {
+  it('stacks source value above deleted tags without provider type details', () => {
     const html = renderCard({
       events: [{ ...events[0], isDelete: true }],
     });
@@ -169,26 +168,32 @@ describe('RequestEventsDetailsCard pagination', () => {
     expect(html).toContain('_requestEventsSourceValue_');
     expect(html).toContain('_requestEventsSourceTags_');
     expect(html).toContain('_requestEventsDeletedTag_');
-    expect(html).toContain('Provider A');
-    expect(html).toContain('openai');
+    expect(html).toContain('AI account 1');
+    expect(html).not.toContain('openai account 1');
+    expect(html).not.toContain('codex account 1');
+    expect(html).not.toContain('claude account 1');
+    expect(html).not.toContain('Provider A');
+    expect(html).not.toContain('openai</span>');
     expect(html).toContain('Deleted');
   });
 
   it('uses backend source values while showing resolved source labels', () => {
     const html = renderCard({
       sourceFilter: 'source-a',
-      sourceOptions: [{ value: 'source-a', label: 'Provider A', displayName: 'Provider A(Team Prefix)' }, { value: 'source-b', label: 'Provider B' }],
+      sourceOptions: [{ value: 'source-a', label: 'AI account 1', displayName: 'AI account 1' }, { value: 'source-b', label: 'AI account 2' }],
     });
 
-    expect(countOccurrences(html, 'Provider A(Team Prefix)')).toBeGreaterThanOrEqual(1);
-    expect(html).toContain('aria-label="Source"><span class="_triggerText_c80422 ">Provider A(Team Prefix)</span>');
+    expect(countOccurrences(html, 'AI account 1')).toBeGreaterThanOrEqual(1);
+    expect(html).toContain('aria-label="Source"><span class="_triggerText_c80422 ">AI account 1</span>');
+    expect(html).not.toContain('openai account 1');
+    expect(html).not.toContain('codex account 1');
   });
 
   it('uses backend model and source options instead of current page grouping', () => {
     const html = renderCard({ modelFilter: 'claude-opus', sourceFilter: 'source-b' });
 
     expect(html).toContain('aria-label="Model"><span class="_triggerText_c80422 ">claude-opus</span>');
-    expect(html).toContain('aria-label="Source"><span class="_triggerText_c80422 ">Provider B</span>');
+    expect(html).toContain('aria-label="Source"><span class="_triggerText_c80422 ">AI account 2</span>');
   });
 
   it('renders a Result filter and no Credential filter control', () => {
@@ -202,11 +207,35 @@ describe('RequestEventsDetailsCard pagination', () => {
   it('keeps selected filters visible when backend options do not include them', () => {
     const html = renderCard({
       modelFilter: 'claude-haiku',
-      sourceFilter: 'source-c',
+      sourceFilter: 'sk-raw-source-secret',
     });
 
     expect(html).toContain('claude-haiku');
-    expect(html).toContain('source-c');
+    expect(html).toContain('aria-label="Source"><span class="_triggerText_c80422 ">-</span>');
+    expect(html).not.toContain('sk-raw-source-secret');
+  });
+
+  it('masks raw API keys and anonymizes source labels from events and filter options', () => {
+    const html = renderCard({
+      events: [{
+        ...events[0],
+        api_key: 'sk-live-secret-value-1234567890',
+        source: 'OpenAI Primary',
+        source_raw: 'source-a',
+      }],
+      sourceFilter: 'source-a',
+      sourceOptions: [{
+        value: 'source-a',
+        label: 'codex account 1',
+        displayName: 'OpenAI Primary',
+      }],
+    });
+
+    expect(html).toMatch(/sk-l\*+7890/);
+    expect(html).toContain('AI account 1');
+    expect(html).not.toContain('sk-live-secret-value-1234567890');
+    expect(html).not.toContain('OpenAI Primary');
+    expect(html).not.toContain('codex account 1');
   });
 
   it('falls back to a computed page count when metadata is not populated', () => {

@@ -148,6 +148,10 @@ func mapAnalysisRecord(record *repodto.AnalysisRecord) *servicedto.AnalysisSnaps
 	for _, item := range record.APIKeyComposition {
 		apiKeys = append(apiKeys, mapAnalysisCompositionRecord(item))
 	}
+	apiKeyCosts := make([]servicedto.AnalysisCostCompositionItem, 0, len(record.APIKeyCostComposition))
+	for _, item := range record.APIKeyCostComposition {
+		apiKeyCosts = append(apiKeyCosts, mapAnalysisCostCompositionRecord(item))
+	}
 	models := make([]servicedto.AnalysisCompositionItem, 0, len(record.ModelComposition))
 	for _, item := range record.ModelComposition {
 		models = append(models, mapAnalysisCompositionRecord(item))
@@ -175,6 +179,7 @@ func mapAnalysisRecord(record *repodto.AnalysisRecord) *servicedto.AnalysisSnaps
 		RangeEnd:              record.RangeEnd,
 		TokenUsage:            tokenUsage,
 		APIKeyComposition:     apiKeys,
+		APIKeyCostComposition: apiKeyCosts,
 		ModelComposition:      models,
 		AuthFilesComposition:  authFiles,
 		AIProviderComposition: aiProviders,
@@ -192,6 +197,15 @@ func mapAnalysisCompositionRecord(item repodto.AnalysisCompositionRecord) servic
 		OutputTokens:    item.OutputTokens,
 		CachedTokens:    item.CachedTokens,
 		ReasoningTokens: item.ReasoningTokens,
+	}
+}
+
+func mapAnalysisCostCompositionRecord(item repodto.AnalysisCostCompositionRecord) servicedto.AnalysisCostCompositionItem {
+	return servicedto.AnalysisCostCompositionItem{
+		Key:      item.Key,
+		Label:    item.Label,
+		Cost:     item.Cost,
+		Requests: item.Requests,
 	}
 }
 

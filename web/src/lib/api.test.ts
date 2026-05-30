@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { appPath, fetchAnalysis, fetchCpaApiKeyOptions, fetchCpaApiKeys, fetchKeyOverview, fetchUsageOverview, fetchUsageQuotaCache, fetchUpdateCheck, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, fetchUsageIdentities, fetchUsageIdentitiesPage, fetchUsageQuotaRefreshTask, loginWithCPAAPIKey, logout, markStatusActive, refreshUsageQuotas, updateCpaApiKeyAlias } from './api';
+import { appPath, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchCpaApiKeys, fetchKeyOverview, fetchUsageOverview, fetchUsageQuotaCache, fetchUpdateCheck, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, fetchUsageIdentities, fetchUsageIdentitiesPage, fetchUsageQuotaRefreshTask, loginWithCPAAPIKey, logout, markStatusActive, refreshUsageQuotas, updateCpaApiKeyAlias } from './api';
 
 describe('fetchUsageEvents', () => {
   afterEach(() => {
@@ -289,7 +289,7 @@ describe('fetchUsageEvents', () => {
     vi.stubGlobal('window', { __APP_BASE_PATH__: undefined });
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ items: [{ id: '9007199254740993', keyAlias: '', displayKey: 'sk-*********123456', label: 'sk-*********123456', lastSyncedAt: null }] }),
+      json: async () => ({ items: [{ id: '9007199254740993', keyAlias: '', displayKey: 'sk-a*****************3456', label: 'sk-a*****************3456', lastSyncedAt: null }] }),
     } as Response);
     const signal = new AbortController().signal;
 
@@ -309,11 +309,11 @@ describe('fetchUsageEvents', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ options: [{ id: '123', keyAlias: 'Main', displayKey: 'sk-*********123456', label: 'Main', lastSyncedAt: '2026-05-13T00:00:00Z' }] }),
+        json: async () => ({ options: [{ id: '123', label: 'sk-a*****************3456' }] }),
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: '123', keyAlias: '', displayKey: 'sk-*********123456', label: 'sk-*********123456', lastSyncedAt: '2026-05-13T00:00:00Z' }),
+        json: async () => ({ id: '123', keyAlias: '', displayKey: 'sk-a*****************3456', label: 'sk-a*****************3456', lastSyncedAt: '2026-05-13T00:00:00Z' }),
       } as Response);
     const signal = new AbortController().signal;
 
@@ -326,7 +326,8 @@ describe('fetchUsageEvents', () => {
     expect(options.options[0].id).toBe('123');
     expect(new URL(String(optionsUrl), 'http://localhost').pathname).toBe('/api/v1/usage/api-keys/options');
     expect(optionsInit).toMatchObject({ credentials: 'include', signal, cache: 'no-store' });
-    expect(updated.label).toBe('sk-*********123456');
+    expect(options.options[0].label).toBe('sk-a*****************3456');
+    expect(updated.label).toBe('sk-a*****************3456');
     expect(new URL(String(updateUrl), 'http://localhost').pathname).toBe('/api/v1/usage/api-keys/123');
     expect(updateInit).toMatchObject({ credentials: 'include', method: 'PATCH' });
     expect(updateInit?.body).toBe(JSON.stringify({ keyAlias: '' }));
@@ -454,5 +455,23 @@ describe('fetchUsageEvents', () => {
     expect(response.updateAvailable).toBe(true);
     expect(parsed.pathname).toBe('/api/v1/update/check');
     expect(init).toMatchObject({ credentials: 'include', signal });
+  });
+
+  it('loads available models from the read-only model endpoint', async () => {
+    vi.stubGlobal('window', { __APP_BASE_PATH__: undefined });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ models: ['gpt-5', 'gpt-5-mini'] }),
+    } as Response);
+    const signal = new AbortController().signal;
+
+    const response = await fetchAvailableModels(signal);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const parsed = new URL(String(url), 'http://localhost');
+
+    expect(response.models).toEqual(['gpt-5', 'gpt-5-mini']);
+    expect(parsed.pathname).toBe('/api/v1/models/available');
+    expect(init).toMatchObject({ credentials: 'include', signal, cache: 'no-store' });
   });
 });

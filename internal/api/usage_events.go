@@ -198,12 +198,19 @@ func usageEventPublicSource(row servicedto.UsageEventRecord, identity resolvedUs
 	isDelete := strings.TrimSpace(row.AuthIndex) != ""
 	switch strings.TrimSpace(row.AuthType) {
 	case "apikey":
-		return strings.TrimSpace(row.Provider), isDelete
+		return fallbackProviderAccountLabel(row), isDelete
 	case "oauth":
 		return strings.TrimSpace(row.Source), isDelete
 	default:
-		return strings.TrimSpace(row.Provider), isDelete
+		return fallbackProviderAccountLabel(row), isDelete
 	}
+}
+
+func fallbackProviderAccountLabel(row servicedto.UsageEventRecord) string {
+	if strings.TrimSpace(row.AuthIndex) == "" && strings.TrimSpace(row.Provider) == "" && strings.TrimSpace(row.Source) == "" {
+		return ""
+	}
+	return "AI account 1"
 }
 
 func loadUsageEventModelFilterOptions(c *gin.Context, usageProvider service.UsageProvider) ([]string, error) {
@@ -232,12 +239,13 @@ func buildUsageSourceFilterOptions(identities []entities.UsageIdentity) []usageS
 	}
 	options := make([]usageSourceFilterOption, 0, len(identities))
 	seen := make(map[string]struct{}, len(identities))
+	providerLabels := newProviderAccountLabels(identities)
 	for _, identity := range identities {
 		// Source 下拉只展示活跃且有流量的身份，避免已删除身份继续出现在筛选项里。
 		if identity.IsDeleted || identity.TotalRequests == 0 {
 			continue
 		}
-		option, ok := usageSourceFilterOptionFromIdentity(identity)
+		option, ok := usageSourceFilterOptionFromIdentity(identity, providerLabels)
 		if !ok {
 			continue
 		}
@@ -250,7 +258,7 @@ func buildUsageSourceFilterOptions(identities []entities.UsageIdentity) []usageS
 	return options
 }
 
-func usageSourceFilterOptionFromIdentity(identity entities.UsageIdentity) (usageSourceFilterOption, bool) {
+func usageSourceFilterOptionFromIdentity(identity entities.UsageIdentity, providerLabels providerAccountLabels) (usageSourceFilterOption, bool) {
 	switch identity.AuthType {
 	case entities.UsageIdentityAuthTypeAuthFile, entities.UsageIdentityAuthTypeAIProvider:
 		value := strings.TrimSpace(identity.Identity)
@@ -258,7 +266,13 @@ func usageSourceFilterOptionFromIdentity(identity entities.UsageIdentity) (usage
 			return usageSourceFilterOption{}, false
 		}
 		label := strings.TrimSpace(identity.Name)
-		displayName := helper.UsageIdentityDisplayName(identity)
+		displayName := label
+		if identity.AuthType == entities.UsageIdentityAuthTypeAIProvider {
+			displayName = providerLabels.labelFor(identity)
+			label = displayName
+		} else if displayName == "" {
+			displayName = helper.UsageIdentityDisplayName(identity)
+		}
 		return usageSourceFilterOption{Value: value, Label: label, DisplayName: displayName}, true
 	default:
 		return usageSourceFilterOption{}, false

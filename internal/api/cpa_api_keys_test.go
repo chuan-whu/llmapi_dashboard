@@ -54,10 +54,10 @@ func TestCPAAPIKeyRoutesReturnDisplayDataWithoutRawKeys(t *testing.T) {
 	if len(parsed.Items) != 2 {
 		t.Fatalf("expected two API key rows, got %+v", parsed.Items)
 	}
-	if parsed.Items[0].ID != "1" || parsed.Items[0].KeyAlias != "Primary Key" || parsed.Items[0].DisplayKey != "sk-*********123456" || parsed.Items[0].Label != "Primary Key" || parsed.Items[0].LastSyncedAt == nil {
+	if parsed.Items[0].ID != "1" || parsed.Items[0].KeyAlias != "" || parsed.Items[0].DisplayKey != "sk-a*****************3456" || parsed.Items[0].Label != "sk-a*****************3456" || parsed.Items[0].LastSyncedAt == nil {
 		t.Fatalf("unexpected aliased row: %+v", parsed.Items[0])
 	}
-	if parsed.Items[1].ID != "2" || parsed.Items[1].KeyAlias != "" || parsed.Items[1].DisplayKey != "sk-*********654321" || parsed.Items[1].Label != "sk-*********654321" {
+	if parsed.Items[1].ID != "2" || parsed.Items[1].KeyAlias != "" || parsed.Items[1].DisplayKey != "sk-b*****************4321" || parsed.Items[1].Label != "sk-b*****************4321" {
 		t.Fatalf("unexpected fallback row: %+v", parsed.Items[1])
 	}
 }
@@ -88,12 +88,12 @@ func TestCPAAPIKeyRoutesNormalizeStaleDisplayKeys(t *testing.T) {
 	if err := json.Unmarshal(resp.Body.Bytes(), &parsed); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(parsed.Items) != 1 || parsed.Items[0].DisplayKey != "sk-*********maWyTA" || parsed.Items[0].Label != "sk-*********maWyTA" {
+	if len(parsed.Items) != 1 || parsed.Items[0].DisplayKey != "sk-B*****************WyTA" || parsed.Items[0].Label != "sk-B*****************WyTA" {
 		t.Fatalf("expected canonical display data, got %+v", parsed.Items)
 	}
 }
 
-func TestCPAAPIKeyOptionsReturnActiveLabels(t *testing.T) {
+func TestCPAAPIKeyOptionsReturnMaskedKeys(t *testing.T) {
 	db := openCPAAPIKeyAPITestDatabase(t)
 	if err := repository.SyncCPAAPIKeys(db, []string{"sk-alpha123456", "sk-beta654321"}, time.Date(2026, 5, 13, 10, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatalf("seed API keys: %v", err)
@@ -122,8 +122,11 @@ func TestCPAAPIKeyOptionsReturnActiveLabels(t *testing.T) {
 	if err := json.Unmarshal(resp.Body.Bytes(), &parsed); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(parsed.Options) != 1 || parsed.Options[0].ID != "1" || parsed.Options[0].Label != "Primary Key" {
+	if len(parsed.Options) != 1 || parsed.Options[0].ID != "1" || parsed.Options[0].Label != "sk-a*****************3456" {
 		t.Fatalf("unexpected options: %+v", parsed.Options)
+	}
+	if strings.Contains(resp.Body.String(), "Primary Key") {
+		t.Fatalf("expected options response not to expose API key alias: %s", resp.Body.String())
 	}
 	var raw struct {
 		Options []map[string]any `json:"options"`

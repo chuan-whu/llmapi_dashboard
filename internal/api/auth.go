@@ -148,7 +148,7 @@ func (h *authHandler) getSession(c *gin.Context) {
 			c.JSON(http.StatusOK, sessionResponse{Authenticated: false})
 			return
 		}
-		response.APIKey = &sessionAPIKeyResponse{DisplayKey: helper.CPAAPIKeyMaskedDisplayKey(row), Alias: row.KeyAlias}
+		response.APIKey = &sessionAPIKeyResponse{DisplayKey: helper.CPAAPIKeyMaskedDisplayKey(row)}
 	}
 	c.JSON(http.StatusOK, response)
 }

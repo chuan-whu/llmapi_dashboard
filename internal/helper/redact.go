@@ -7,6 +7,7 @@ import (
 )
 
 const sensitiveValueMask = "*********"
+const apiKeyDisplayMask = "*****************"
 
 // RedactSensitiveValue 使用统一格式隐藏前端展示中的敏感值：长值保留前 3 位和后 6 位，短值全隐藏。
 func RedactSensitiveValue(value string) string {
@@ -24,15 +25,26 @@ func RedactSensitiveValue(value string) string {
 // CPAAPIKeyMaskedDisplayKey 返回 CPA API Key 的安全展示 key；优先基于原始 key 重新脱敏，避免历史 DisplayKey 格式不一致。
 func CPAAPIKeyMaskedDisplayKey(row entities.CPAAPIKey) string {
 	if strings.TrimSpace(row.APIKey) != "" {
-		return RedactSensitiveValue(row.APIKey)
+		return MaskAPIKeyForDisplay(row.APIKey)
 	}
 	return strings.TrimSpace(row.DisplayKey)
 }
 
-// CPAAPIKeyDisplayName 返回 CPA API Key 的前端展示名：优先别名，其次使用统一脱敏 key。
+// CPAAPIKeyDisplayName 返回 CPA API Key 的前端展示名。别名只保存在库里，不对看板展示。
 func CPAAPIKeyDisplayName(row entities.CPAAPIKey) string {
-	if strings.TrimSpace(row.KeyAlias) != "" {
-		return strings.TrimSpace(row.KeyAlias)
-	}
 	return CPAAPIKeyMaskedDisplayKey(row)
+}
+
+// MaskAPIKeyForDisplay masks API keys for dashboard labels while preserving
+// enough prefix/suffix to distinguish keys without exposing aliases or secrets.
+func MaskAPIKeyForDisplay(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || trimmed == "unknown" {
+		return "unknown"
+	}
+	runes := []rune(trimmed)
+	if len(runes) <= 8 {
+		return sensitiveValueMask
+	}
+	return string(runes[:4]) + apiKeyDisplayMask + string(runes[len(runes)-4:])
 }

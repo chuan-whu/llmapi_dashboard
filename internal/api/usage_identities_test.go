@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/helper"
 	"cpa-usage-keeper/internal/service"
 )
 
@@ -270,7 +269,7 @@ func TestUsageIdentitiesPageRouteAcceptsRepeatedTypesAndReturnsTypeCounts(t *tes
 	}
 }
 
-func TestUsageIdentitiesRouteReturnsProviderDisplayName(t *testing.T) {
+func TestUsageIdentitiesRouteReturnsAnonymizedProviderDisplayName(t *testing.T) {
 	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{items: []entities.UsageIdentity{{
 		ID:           1,
 		Name:         "Provider Name",
@@ -290,17 +289,16 @@ func TestUsageIdentitiesRouteReturnsProviderDisplayName(t *testing.T) {
 	if resp.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", resp.Code, body)
 	}
-	if !contains(body, `"displayName":"Provider Name(Team Prefix)"`) {
-		t.Fatalf("expected displayName with name and prefix, got %s", body)
+	if !contains(body, `"displayName":"AI account 1"`) || !contains(body, `"name":"AI account 1"`) || !contains(body, `"provider":""`) || !contains(body, `"prefix":""`) {
+		t.Fatalf("expected anonymized provider fields, got %s", body)
 	}
-	if !contains(body, `"prefix":"Team Prefix"`) {
-		t.Fatalf("expected published prefix field, got %s", body)
+	if contains(body, "openai account") || contains(body, "codex account") || contains(body, "claude account") || contains(body, "Provider Name") || contains(body, "Team Prefix") || contains(body, "OpenAI") || contains(body, "provider-auth-index") {
+		t.Fatalf("expected provider details to stay hidden, got %s", body)
 	}
 }
 
-func TestUsageIdentitiesRouteMasksAIProviderIdentity(t *testing.T) {
+func TestUsageIdentitiesRouteAnonymizesAIProviderIdentity(t *testing.T) {
 	rawLookupKey := "sk-live-secret-value"
-	maskedLookupKey := helper.RedactSensitiveValue(rawLookupKey)
 	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{items: []entities.UsageIdentity{
 		{ID: 1, Name: "Provider Name", Prefix: "Team Prefix", AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "apikey", Identity: rawLookupKey, Type: "openai", Provider: "OpenAI"},
 	}}})
@@ -316,11 +314,11 @@ func TestUsageIdentitiesRouteMasksAIProviderIdentity(t *testing.T) {
 	if contains(body, rawLookupKey) {
 		t.Fatalf("expected raw AI provider lookup key to be hidden, got %s", body)
 	}
-	if !contains(body, `"identity":"`+maskedLookupKey+`"`) {
-		t.Fatalf("expected masked AI provider identity %q in response body: %s", maskedLookupKey, body)
+	if !contains(body, `"identity":"AI account 1"`) {
+		t.Fatalf("expected anonymized AI provider identity in response body: %s", body)
 	}
-	if !contains(body, `"name":"Provider Name"`) || !contains(body, `"provider":"OpenAI"`) || !contains(body, `"displayName":"Provider Name(Team Prefix)"`) {
-		t.Fatalf("expected AI provider display fields to use usage_identities values directly, got %s", body)
+	if contains(body, "openai account") || contains(body, "codex account") || contains(body, "claude account") || contains(body, "Provider Name") || contains(body, "Team Prefix") || contains(body, "OpenAI") {
+		t.Fatalf("expected AI provider display fields to hide usage_identities details, got %s", body)
 	}
 }
 
