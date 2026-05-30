@@ -25,7 +25,7 @@ type LoginErrors = {
 interface LoginPageProps extends LoginErrors {
   loading?: boolean;
   onPasswordSubmit: (password: string) => Promise<void>;
-  onAPIKeySubmit: (apiKey: string) => Promise<void>;
+  onAPIKeySubmit?: (apiKey: string) => Promise<void>;
 }
 
 export const getLoginErrorForMode = (mode: LoginMode, { adminError = '', apiKeyError = '' }: LoginErrors) => (
@@ -44,17 +44,18 @@ export function LoginPage({ loading = false, adminError = '', apiKeyError = '', 
     () => THEME_OPTIONS.map((option) => ({ ...option, label: t(option.labelKey) })),
     [t]
   );
+  const effectiveMode: LoginMode = onAPIKeySubmit ? mode : 'admin';
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (mode === 'api_key') {
+    if (effectiveMode === 'api_key' && onAPIKeySubmit) {
       await onAPIKeySubmit(apiKey);
       return;
     }
     await onPasswordSubmit(password);
   };
 
-  const canSubmit = mode === 'api_key' ? Boolean(apiKey.trim()) : Boolean(password.trim());
+  const canSubmit = effectiveMode === 'api_key' ? Boolean(apiKey.trim()) : Boolean(password.trim());
 
   return (
     <div className={styles.pageShell}>
@@ -92,7 +93,8 @@ export function LoginPage({ loading = false, adminError = '', apiKeyError = '', 
             <p className={styles.cardHint}>{t('auth.console_hint')}</p>
           </div>
 
-          <div className={styles.tabs} role="tablist" aria-label={t('auth.login_method')}>
+          {onAPIKeySubmit && (
+            <div className={styles.tabs} role="tablist" aria-label={t('auth.login_method')}>
             <button
               type="button"
               role="tab"
@@ -113,10 +115,11 @@ export function LoginPage({ loading = false, adminError = '', apiKeyError = '', 
             >
               {t('auth.api_key_tab')}
             </button>
-          </div>
+            </div>
+          )}
 
           <form className={styles.form} onSubmit={(event) => void handleSubmit(event)}>
-            {mode === 'api_key' ? (
+            {effectiveMode === 'api_key' ? (
               <>
                 <Input
                   type="password"
@@ -146,7 +149,7 @@ export function LoginPage({ loading = false, adminError = '', apiKeyError = '', 
               </>
             )}
             <Button type="submit" fullWidth loading={loading} disabled={!canSubmit}>
-              {mode === 'api_key' ? t('auth.api_key_login_submit') : t('auth.login_submit')}
+              {effectiveMode === 'api_key' ? t('auth.api_key_login_submit') : t('auth.login_submit')}
             </Button>
           </form>
         </Card>

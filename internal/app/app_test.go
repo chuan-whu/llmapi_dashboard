@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"cpa-usage-keeper/internal/config"
 	"cpa-usage-keeper/internal/entities"
@@ -79,8 +80,9 @@ func TestReadOnlyRouterKeepsDashboardEndpointsAndDropsCPADependentEndpoints(t *t
 		{method: http.MethodGet, path: "/api/v1/usage/events/filters/models", status: http.StatusOK},
 		{method: http.MethodGet, path: "/api/v1/usage/events/filters/sources", status: http.StatusOK},
 		{method: http.MethodGet, path: "/api/v1/usage/api-keys/options", status: http.StatusOK},
-		{method: http.MethodGet, path: "/api/v1/auth/session", status: http.StatusNotFound},
-		{method: http.MethodPost, path: "/api/v1/auth/logout", status: http.StatusNotFound},
+		{method: http.MethodGet, path: "/api/v1/auth/session", status: http.StatusOK},
+		{method: http.MethodPost, path: "/api/v1/auth/logout", status: http.StatusNoContent},
+		{method: http.MethodPost, path: "/api/v1/auth/api-key-login", status: http.StatusNotFound},
 		{method: http.MethodGet, path: "/api/v1/key-overview?range=8h", status: http.StatusNotFound},
 		{method: http.MethodGet, path: "/api/v1/pricing", status: http.StatusNotFound},
 		{method: http.MethodPost, path: "/api/v1/quota/refresh", status: http.StatusNotFound},
@@ -92,6 +94,43 @@ func TestReadOnlyRouterKeepsDashboardEndpointsAndDropsCPADependentEndpoints(t *t
 		if resp.Code != testCase.status {
 			t.Fatalf("%s %s expected status %d, got %d body=%s", testCase.method, testCase.path, testCase.status, resp.Code, resp.Body.String())
 		}
+	}
+}
+
+func TestReadOnlyRouterProtectsDashboardEndpointsWhenAuthEnabled(t *testing.T) {
+	cfg := testAppConfig(t)
+	cfg.AuthEnabled = true
+	cfg.LoginPassword = "secret"
+	cfg.AuthSessionTTL = time.Hour
+	app, err := NewWithConfig(cfg)
+	if err != nil {
+		t.Fatalf("NewWithConfig returned error: %v", err)
+	}
+	defer app.Close()
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/overview?range=8h", nil)
+	app.Router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthenticated overview to return 401, got %d body=%s", resp.Code, resp.Body.String())
+	}
+
+	loginResp := httptest.NewRecorder()
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"password":"secret"}`))
+	loginReq.Header.Set("Content-Type", "application/json")
+	app.Router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusNoContent {
+		t.Fatalf("expected login status 204, got %d body=%s", loginResp.Code, loginResp.Body.String())
+	}
+
+	authedResp := httptest.NewRecorder()
+	authedReq := httptest.NewRequest(http.MethodGet, "/api/v1/usage/overview?range=8h", nil)
+	for _, cookie := range loginResp.Result().Cookies() {
+		authedReq.AddCookie(cookie)
+	}
+	app.Router.ServeHTTP(authedResp, authedReq)
+	if authedResp.Code != http.StatusOK {
+		t.Fatalf("expected authenticated overview to return 200, got %d body=%s", authedResp.Code, authedResp.Body.String())
 	}
 }
 

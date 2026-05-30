@@ -5,18 +5,19 @@ const appSource = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
 const appStylesSource = readFileSync(new URL('./App.css', import.meta.url), 'utf8');
 
 describe('App read-only dashboard shell', () => {
-  it('renders UsagePage directly without auth routing', () => {
+  it('keeps password login protection before the read-only UsagePage', () => {
     expect(appSource).toContain("import { UsagePage } from './pages/UsagePage';");
-    expect(appSource).toContain('<UsagePage />');
-    expect(appSource).not.toContain('LoginPage');
+    expect(appSource).toContain("import { LoginPage } from './pages/LoginPage';");
+    expect(appSource).toContain('getSession');
+    expect(appSource).toContain('login(password)');
+    expect(appSource).toContain('<UsagePage onAuthRequired={clearSession} />');
     expect(appSource).not.toContain('KeyOverviewPage');
-    expect(appSource).not.toContain('getSession');
   });
 
   it('mounts the shared footer from the app shell', () => {
     expect(appSource).toContain("import './App.css';");
     expect(appSource).toContain("import { AppFooter } from './components/AppFooter';");
-    expect(appSource).toMatch(/<div className="app-frame">[\s\S]*<main className="app-main">[\s\S]*<UsagePage \/>[\s\S]*<\/main>[\s\S]*<AppFooter \/>[\s\S]*<\/div>/);
+    expect(appSource).toMatch(/<div className="app-frame">[\s\S]*<main className="app-main">\{page\}<\/main>[\s\S]*<AppFooter \/>[\s\S]*<\/div>/);
   });
 
   it('lets app pages fill the space above the shared footer', () => {

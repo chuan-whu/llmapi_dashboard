@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"cpa-usage-keeper/internal/api"
+	"cpa-usage-keeper/internal/auth"
 	"cpa-usage-keeper/internal/config"
 	"cpa-usage-keeper/internal/logging"
 	"cpa-usage-keeper/internal/poller"
@@ -86,16 +87,26 @@ func NewWithConfig(cfg config.Config) (*App, error) {
 	usageService := service.NewUsageService(db)
 	usageIdentityService := service.NewUsageIdentityService(db)
 	cpaAPIKeyService := service.NewCPAAPIKeyService(db)
+	sessionManager := auth.NewSessionManager(cfg.AuthSessionTTL)
+	authConfig := api.AuthConfig{
+		Enabled:       cfg.AuthEnabled,
+		LoginPassword: cfg.LoginPassword,
+		SessionTTL:    cfg.AuthSessionTTL,
+		BasePath:      cfg.AppBasePath,
+	}
+	authHandler := api.NewAuthHandler(authConfig, sessionManager)
 
 	return &App{
-		Config: &cfg,
-		DB:     db,
+		Config:    &cfg,
+		DB:        db,
 		LogCloser: logCloser,
 		Router: api.NewReadOnlyRouter(
 			webui.Static,
 			usageService,
 			usageIdentityService,
 			cpaAPIKeyService,
+			authConfig,
+			authHandler,
 			cfg.AppBasePath,
 		),
 	}, nil

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -94,9 +95,27 @@ func Load(options LoadOptions) (*Config, error) {
 		SQLitePath:     strings.TrimSpace(os.Getenv("APP_DB_PATH")),
 		LogLevel:       "info",
 		LogFileEnabled: false,
+		AuthSessionTTL: 7 * 24 * time.Hour,
 	}
 	if cfg.SQLitePath == "" {
 		return nil, fmt.Errorf("APP_DB_PATH is required")
+	}
+	authEnabled, err := getBool("AUTH_ENABLED", false)
+	if err != nil {
+		return nil, err
+	}
+	authSessionTTL, err := getDuration("AUTH_SESSION_TTL", cfg.AuthSessionTTL)
+	if err != nil {
+		return nil, err
+	}
+	if authSessionTTL <= 0 {
+		return nil, fmt.Errorf("AUTH_SESSION_TTL must be positive")
+	}
+	cfg.AuthEnabled = authEnabled
+	cfg.LoginPassword = strings.TrimSpace(os.Getenv("LOGIN_PASSWORD"))
+	cfg.AuthSessionTTL = authSessionTTL
+	if cfg.AuthEnabled && cfg.LoginPassword == "" {
+		return nil, fmt.Errorf("LOGIN_PASSWORD is required when AUTH_ENABLED is true")
 	}
 	cfg.resolveRelativePaths(envBaseDir)
 	return cfg, nil
@@ -213,4 +232,28 @@ func getString(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func getDuration(key string, fallback time.Duration) (time.Duration, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, nil
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a valid duration: %w", key, err)
+	}
+	return duration, nil
+}
+
+func getBool(key string, fallback bool) (bool, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%s must be a valid bool: %w", key, err)
+	}
+	return parsed, nil
 }

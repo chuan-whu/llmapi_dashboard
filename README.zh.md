@@ -37,6 +37,9 @@ vim .env
 APP_DB_PATH=/absolute/path/to/app.db
 APP_PORT=8080
 APP_BASE_PATH=
+AUTH_ENABLED=false
+LOGIN_PASSWORD=replace-with-your-login-password
+AUTH_SESSION_TTL=168h
 ```
 
 启动服务：
@@ -64,6 +67,9 @@ services:
       APP_DB_PATH: /data/app.db
       APP_PORT: 8080
       APP_BASE_PATH: ""
+      AUTH_ENABLED: "false"
+      LOGIN_PASSWORD: replace-with-your-login-password
+      AUTH_SESSION_TTL: 168h
     volumes:
       - ./data/app.db:/data/app.db:ro
 ```
@@ -90,6 +96,7 @@ docker run -d \
   -p 8080:8080 \
   -e APP_DB_PATH=/data/app.db \
   -e APP_PORT=8080 \
+  -e AUTH_ENABLED=false \
   -v "$(pwd)/data/app.db:/data/app.db:ro" \
   ghcr.io/willxup/cpa-usage-keeper:latest
 ```
@@ -147,6 +154,9 @@ sudo systemctl restart cpa-usage-keeper
 | `APP_DB_PATH` | 是 | - | 现有 Keeper SQLite `app.db` 路径；应用会以只读方式打开 |
 | `APP_PORT` | 否 | `8080` | HTTP 监听端口 |
 | `APP_BASE_PATH` | 否 | 根路径 | 子路径部署前缀，例如 `/keeper`；留空表示部署在 `/` |
+| `AUTH_ENABLED` | 否 | `false` | 是否启用登录保护；公网部署建议设为 `true` |
+| `LOGIN_PASSWORD` | 启用登录保护时是 | - | 管理员登录密码 |
+| `AUTH_SESSION_TTL` | 否 | `168h` | 登录 session 有效时长 |
 
 `APP_BASE_PATH` 必须为空或以 `/` 开头；例如 `/keeper`，`/keeper/` 会规范为 `/keeper`。
 

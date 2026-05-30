@@ -53,6 +53,8 @@ func NewReadOnlyRouter(
 	usageProvider service.UsageProvider,
 	usageIdentityProvider service.UsageIdentityProvider,
 	cpaAPIKeyProvider service.CPAAPIKeyProvider,
+	authConfig AuthConfig,
+	authHandler *authHandler,
 	basePath string,
 ) *gin.Engine {
 	router := gin.New()
@@ -66,11 +68,22 @@ func NewReadOnlyRouter(
 	apiV1.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
-	registerReadOnlyStatusRoute(apiV1)
-	registerUsageOverviewRoute(apiV1, usageProvider)
-	registerUsageAnalysisRoute(apiV1, usageProvider, cpaAPIKeyProvider)
-	registerUsageEventsRoute(apiV1, usageProvider, usageIdentityProvider, cpaAPIKeyProvider)
-	registerCPAAPIKeyOptionRoutes(apiV1, cpaAPIKeyProvider)
+
+	authGroup := apiV1.Group("/auth")
+	if authHandler == nil {
+		authHandler = NewAuthHandler(authConfig, nil)
+	}
+	authGroup.GET("/session", authHandler.getSession)
+	authGroup.POST("/login", authHandler.login)
+	authGroup.POST("/logout", authHandler.logout)
+
+	protected := apiV1.Group("")
+	protected.Use(authHandler.adminMiddleware())
+	registerReadOnlyStatusRoute(protected)
+	registerUsageOverviewRoute(protected, usageProvider)
+	registerUsageAnalysisRoute(protected, usageProvider, cpaAPIKeyProvider)
+	registerUsageEventsRoute(protected, usageProvider, usageIdentityProvider, cpaAPIKeyProvider)
+	registerCPAAPIKeyOptionRoutes(protected, cpaAPIKeyProvider)
 	registerStaticRoutes(router, appGroup, staticFS, basePath)
 	return router
 }

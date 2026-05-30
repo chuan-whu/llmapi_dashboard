@@ -14,7 +14,7 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { ApiError, fetchAnalysis, fetchCpaApiKeyOptions, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents } from '@/lib/api';
+import { ApiError, fetchAnalysis, fetchCpaApiKeyOptions, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout } from '@/lib/api';
 import type { AnalysisResponse, CpaApiKeyOption, UsageEvent, UsageSourceFilterOption } from '@/lib/types';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
@@ -480,7 +480,11 @@ const emptyAnalysisResponse = (): AnalysisResponse => ({
   heatmap: { api_keys: [], models: [], cells: [] },
 });
 
-export function UsagePage() {
+interface UsagePageProps {
+  onAuthRequired?: () => void;
+}
+
+export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<UsageTab>(loadUsageTab);
   const [timeRange, setTimeRange] = useState<UsageTimeRange>(loadTimeRange);
@@ -505,6 +509,7 @@ export function UsagePage() {
   const [eventsSourceFilter, setEventsSourceFilter] = useState(ALL_REQUEST_EVENTS_FILTER);
   const [eventsResultFilter, setEventsResultFilter] = useState(ALL_REQUEST_EVENTS_FILTER);
   const [manualRefreshLoading, setManualRefreshLoading] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const customStartInputRef = useRef<HTMLInputElement | null>(null);
   const customEndInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -528,6 +533,7 @@ export function UsagePage() {
     customEnd: customTimeRange.end,
     enabled: activeTab === 'overview',
     apiKeyId: selectedApiKeyId,
+    onAuthRequired,
   });
   const { usage, loading, error, lastRefreshedAt, loadUsage } = usageData;
   const overviewDisplayLoading = getOverviewDisplayLoading({ loading, hasUsage: Boolean(usage) });
@@ -598,11 +604,15 @@ export function UsagePage() {
       })
       .catch((fetchError) => {
         if (controller.signal.aborted) return;
+        if (fetchError instanceof ApiError && fetchError.status === 401) {
+          onAuthRequired?.();
+          return;
+        }
         setApiKeyOptions([]);
         setApiKeyOptionsError(fetchError instanceof Error ? fetchError.message : 'Failed to load API key options');
       });
     return () => controller.abort();
-  }, []);
+  }, [onAuthRequired]);
 
   const loadAnalysis = useCallback(async () => {
     if (!customRangeReady) return;
@@ -613,12 +623,17 @@ export function UsagePage() {
       const response = await fetchAnalysis(queryWindow.range, queryWindow.start, queryWindow.end, controller.signal, selectedApiKeyId);
       setAnalysisData(response ?? emptyAnalysisResponse());
     } catch (fetchError) {
-      setAnalysisError(fetchError instanceof Error ? fetchError.message : 'Failed to load analysis');
+      if (fetchError instanceof ApiError && fetchError.status === 401) {
+        onAuthRequired?.();
+        setAnalysisError('AUTH_REQUIRED');
+      } else {
+        setAnalysisError(fetchError instanceof Error ? fetchError.message : 'Failed to load analysis');
+      }
       setAnalysisData(emptyAnalysisResponse());
     } finally {
       setAnalysisLoading(false);
     }
-  }, [customRangeReady, queryWindow.end, queryWindow.range, queryWindow.start, selectedApiKeyId]);
+  }, [customRangeReady, onAuthRequired, queryWindow.end, queryWindow.range, queryWindow.start, selectedApiKeyId]);
 
   const loadEventFilterOptions = useCallback(async () => {
     const controller = new AbortController();
@@ -657,14 +672,19 @@ export function UsagePage() {
       setEventsTotalCount(response.total_count ?? 0);
       setEventsTotalPages(response.total_pages ?? 0);
     } catch (fetchError) {
-      setEventsError(fetchError instanceof Error ? fetchError.message : 'Failed to load request events');
+      if (fetchError instanceof ApiError && fetchError.status === 401) {
+        onAuthRequired?.();
+        setEventsError('AUTH_REQUIRED');
+      } else {
+        setEventsError(fetchError instanceof Error ? fetchError.message : 'Failed to load request events');
+      }
       setEventsData([]);
       setEventsTotalCount(0);
       setEventsTotalPages(0);
     } finally {
       setEventsLoading(false);
     }
-  }, [customRangeReady, eventsModelFilter, eventsPage, eventsPageSize, eventsResultFilter, eventsSourceFilter, queryWindow.end, queryWindow.start, selectedApiKeyId, timeRange]);
+  }, [customRangeReady, eventsModelFilter, eventsPage, eventsPageSize, eventsResultFilter, eventsSourceFilter, onAuthRequired, queryWindow.end, queryWindow.start, selectedApiKeyId, timeRange]);
 
   const refreshActiveTab = useCallback(async () => {
     if (activeTab === 'overview') {
@@ -692,9 +712,14 @@ export function UsagePage() {
   useEffect(() => {
     if (activeTab !== 'events') return;
     void loadEventFilterOptions().catch((fetchError) => {
+      if (fetchError instanceof ApiError && fetchError.status === 401) {
+        onAuthRequired?.();
+        setEventsError('AUTH_REQUIRED');
+        return;
+      }
       setEventsError(fetchError instanceof Error ? fetchError.message : 'Failed to load request event filters');
     });
-  }, [activeTab, loadEventFilterOptions]);
+  }, [activeTab, loadEventFilterOptions, onAuthRequired]);
 
   useEffect(() => {
     if (activeTab !== 'events') return;
@@ -707,12 +732,26 @@ export function UsagePage() {
       await refreshPageData({ refreshActiveTab });
     } catch (refreshError) {
       if (refreshError instanceof ApiError) {
+        if (refreshError.status === 401) {
+          onAuthRequired?.();
+          return;
+        }
         setEventsError(refreshError.message);
       }
     } finally {
       setManualRefreshLoading(false);
     }
-  }, [refreshActiveTab]);
+  }, [onAuthRequired, refreshActiveTab]);
+
+  const handleLogout = useCallback(async () => {
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+      onAuthRequired?.();
+    }
+  }, [onAuthRequired]);
 
   const handleChartLinesChange = useCallback((nextLines: string[]) => {
     setChartLines(sanitizeChartLines(nextLines, overviewModelNames));
@@ -762,23 +801,39 @@ export function UsagePage() {
 
   return (
     <div className={styles.pageShell}>
-      <div className={styles.dashboardLayout}>
-        <header className={styles.header}>
-          <div className={styles.headerTop}>
-            <div className={styles.brandCluster}>
-              <BrandLink className={styles.brandLink} />
+      <div className={styles.pageFrame}>
+        <header className={styles.topBar}>
+          <div className={styles.brandBlock}>
+            <BrandLink className={styles.eyebrow} />
+          </div>
+          <div className={styles.topBarActions}>
+            <LanguageSwitcher className={styles.headerLanguageSwitcher} />
+            <div className={styles.themeSwitcher} role="tablist" aria-label={t('usage_stats.theme_switch')}>
+              {themeOptions.map((option) => {
+                const active = theme === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    className={`${styles.themePill} ${active ? styles.themePillActive : ''}`.trim()}
+                    onClick={() => setTheme(option.value as Theme)}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
-            <div className={styles.headerControls}>
-              <LanguageSwitcher />
-              <label className={styles.themeSwitcher}>
-                <span>{t('usage_stats.theme_switch')}</span>
-                <Select
-                  value={theme}
-                  options={themeOptions}
-                  onChange={(value) => setTheme(value as Theme)}
-                  ariaLabel={t('usage_stats.theme_switch')}
-                />
-              </label>
+            <div className={styles.signOutSwitcher} role="group" aria-label={t('common.logout')}>
+              <button
+                type="button"
+                className={`${styles.signOutPill} ${styles.signOutPillActive}`.trim()}
+                onClick={() => void handleLogout()}
+                disabled={loggingOut}
+              >
+                <span className={styles.signOutPillInner}>{loggingOut ? t('common.loading') : t('common.logout')}</span>
+              </button>
             </div>
           </div>
         </header>
@@ -939,7 +994,7 @@ export function UsagePage() {
             </div>
 
             {apiKeyOptionsError && <div className={styles.errorBox}>{apiKeyOptionsError}</div>}
-            {activeTab === 'overview' && error && <div className={styles.errorBox}>{error}</div>}
+            {activeTab === 'overview' && error && <div className={styles.errorBox}>{error === 'AUTH_REQUIRED' ? t('auth.session_expired') : error}</div>}
 
             {activeTab === 'overview' && (
               <>
@@ -1011,14 +1066,14 @@ export function UsagePage() {
 
             {activeTab === 'analysis' && (
               <>
-                {analysisError && <div className={styles.errorBox}>{analysisError}</div>}
+                {analysisError && <div className={styles.errorBox}>{analysisError === 'AUTH_REQUIRED' ? t('auth.session_expired') : analysisError}</div>}
                 <AnalysisPanel analysis={analysisData} loading={analysisLoading} isDark={isDark} isMobile={isMobile} />
               </>
             )}
 
             {activeTab === 'events' && (
               <>
-                {eventsError && <div className={styles.errorBox}>{eventsError}</div>}
+                {eventsError && <div className={styles.errorBox}>{eventsError === 'AUTH_REQUIRED' ? t('auth.session_expired') : eventsError}</div>}
                 <RequestEventsDetailsCard
                   events={eventsData}
                   loading={eventsLoading}

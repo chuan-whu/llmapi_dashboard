@@ -37,6 +37,9 @@ vim .env
 APP_DB_PATH=/absolute/path/to/app.db
 APP_PORT=8080
 APP_BASE_PATH=
+AUTH_ENABLED=false
+LOGIN_PASSWORD=replace-with-your-login-password
+AUTH_SESSION_TTL=168h
 ```
 
 Start the service:
@@ -64,6 +67,9 @@ services:
       APP_DB_PATH: /data/app.db
       APP_PORT: 8080
       APP_BASE_PATH: ""
+      AUTH_ENABLED: "false"
+      LOGIN_PASSWORD: replace-with-your-login-password
+      AUTH_SESSION_TTL: 168h
     volumes:
       - ./data/app.db:/data/app.db:ro
 ```
@@ -90,6 +96,7 @@ docker run -d \
   -p 8080:8080 \
   -e APP_DB_PATH=/data/app.db \
   -e APP_PORT=8080 \
+  -e AUTH_ENABLED=false \
   -v "$(pwd)/data/app.db:/data/app.db:ro" \
   ghcr.io/willxup/cpa-usage-keeper:latest
 ```
@@ -147,6 +154,9 @@ Only the following application settings are used:
 | `APP_DB_PATH` | Yes | - | Path to an existing Keeper SQLite `app.db`; the application opens it read-only |
 | `APP_PORT` | No | `8080` | HTTP listen port |
 | `APP_BASE_PATH` | No | root path | Subpath prefix, such as `/keeper`; empty means `/` |
+| `AUTH_ENABLED` | No | `false` | Whether to enable login protection; recommended for public deployments |
+| `LOGIN_PASSWORD` | Yes when auth is enabled | - | Admin login password |
+| `AUTH_SESSION_TTL` | No | `168h` | Login session lifetime |
 
 `APP_BASE_PATH` must be empty or start with `/`; for example `/keeper`. `/keeper/` is normalized to `/keeper`.
 

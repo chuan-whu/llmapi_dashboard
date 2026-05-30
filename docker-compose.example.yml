@@ -8,5 +8,8 @@ services:
       APP_DB_PATH: /data/app.db
       APP_PORT: 8080
       APP_BASE_PATH: ""
+      AUTH_ENABLED: "false"
+      LOGIN_PASSWORD: replace-with-your-login-password
+      AUTH_SESSION_TTL: 168h
     volumes:
       - ./data/app.db:/data/app.db:ro

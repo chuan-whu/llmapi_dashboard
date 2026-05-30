@@ -58,13 +58,23 @@ describe('UsagePage toolbar styles', () => {
     expect(usagePageSource).toContain("const USAGE_TAB_OPTIONS = ['overview', 'analysis', 'events'] as const")
   })
 
-  it('removes authenticated management actions from the read-only dashboard header', () => {
-    expect(usagePageSource).toContain("import { ApiError, fetchAnalysis, fetchCpaApiKeyOptions, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents } from '@/lib/api';")
+  it('keeps login protection controls without restoring CPA management actions', () => {
+    expect(usagePageSource).toContain("fetchUsageEvents, logout } from '@/lib/api';")
     expect(usagePageSource).not.toContain("t('usage_stats.check_updates')")
-    expect(usagePageSource).not.toContain("t('common.logout')")
+    expect(usagePageSource).toContain("t('common.logout')")
     expect(usagePageSource).not.toContain('fetchUpdateCheck')
-    expect(usagePageSource).not.toContain('logout')
     expect(usagePageSource).not.toContain('markStatusActive')
+  })
+
+  it('uses the styled top bar classes so header controls stay aligned', () => {
+    expect(usagePageSource).toContain('className={styles.pageFrame}')
+    expect(usagePageSource).toContain('className={styles.topBar}')
+    expect(usagePageSource).toContain('className={styles.topBarActions}')
+    expect(usagePageSource).not.toContain('styles.dashboardLayout')
+    expect(usagePageSource).not.toContain('styles.headerControls')
+    expect(usagePageStyles).toMatch(/\.topBar\s*\{[\s\S]*?align-items:\s*center;/)
+    expect(usagePageStyles).toMatch(/\.topBarActions\s*\{[\s\S]*?align-items:\s*center;/)
+    expect(usagePageStyles).toContain('.headerLanguageSwitcher')
   })
 
   it('keeps mobile tab labels on one line without changing desktop tab sizing', () => {

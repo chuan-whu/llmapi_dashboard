@@ -10,7 +10,7 @@ import (
 
 var configEnvKeys = []string{
 	"APP_DB_PATH", "APP_PORT", "APP_BASE_PATH", "TZ",
-	"CPA_BASE_URL", "CPA_MANAGEMENT_KEY", "AUTH_ENABLED", "LOGIN_PASSWORD",
+	"CPA_BASE_URL", "CPA_MANAGEMENT_KEY", "AUTH_ENABLED", "LOGIN_PASSWORD", "AUTH_SESSION_TTL",
 	"WORK_DIR", "LOG_FILE_ENABLED", "BACKUP_ENABLED", "REDIS_QUEUE_ADDR",
 }
 
@@ -97,8 +97,11 @@ func TestLoadFromEnvAppliesReadOnlyDashboardDefaults(t *testing.T) {
 	if cfg.LogFileEnabled {
 		t.Fatal("expected persistent log files disabled in read-only dashboard mode")
 	}
-	if cfg.CPABaseURL != "" || cfg.CPAManagementKey != "" || cfg.AuthEnabled || cfg.BackupEnabled || cfg.RedisQueueAddr != "" {
-		t.Fatalf("expected CPA/auth/backup/redis settings to be unused, got %+v", cfg)
+	if cfg.CPABaseURL != "" || cfg.CPAManagementKey != "" || cfg.BackupEnabled || cfg.RedisQueueAddr != "" {
+		t.Fatalf("expected CPA/backup/redis settings to be unused, got %+v", cfg)
+	}
+	if cfg.AuthEnabled || cfg.LoginPassword != "" || cfg.AuthSessionTTL != 7*24*time.Hour {
+		t.Fatalf("expected login protection defaults to be disabled with 168h TTL, got %+v", cfg)
 	}
 }
 
@@ -129,19 +132,33 @@ func TestLoadReadsSpecifiedEnvFileAndResolvesDBPath(t *testing.T) {
 	}
 }
 
-func TestLoadIgnoresCPAAndAuthEnvVars(t *testing.T) {
+func TestLoadReadsLoginProtectionEnvVars(t *testing.T) {
 	t.Setenv("APP_DB_PATH", filepath.Join(t.TempDir(), "app.db"))
 	t.Setenv("CPA_BASE_URL", "https://cpa.example.com")
 	t.Setenv("CPA_MANAGEMENT_KEY", "secret")
 	t.Setenv("AUTH_ENABLED", "true")
 	t.Setenv("LOGIN_PASSWORD", "secret")
+	t.Setenv("AUTH_SESSION_TTL", "2h")
 
 	cfg, err := LoadFromEnv()
 	if err != nil {
 		t.Fatalf("LoadFromEnv returned error: %v", err)
 	}
-	if cfg.CPABaseURL != "" || cfg.CPAManagementKey != "" || cfg.AuthEnabled || cfg.LoginPassword != "" {
-		t.Fatalf("expected CPA/auth env vars to be ignored, got %+v", cfg)
+	if cfg.CPABaseURL != "" || cfg.CPAManagementKey != "" {
+		t.Fatalf("expected CPA env vars to be ignored, got %+v", cfg)
+	}
+	if !cfg.AuthEnabled || cfg.LoginPassword != "secret" || cfg.AuthSessionTTL != 2*time.Hour {
+		t.Fatalf("expected login protection env vars to be applied, got %+v", cfg)
+	}
+}
+
+func TestLoadRequiresPasswordWhenAuthEnabled(t *testing.T) {
+	t.Setenv("APP_DB_PATH", filepath.Join(t.TempDir(), "app.db"))
+	t.Setenv("AUTH_ENABLED", "true")
+
+	_, err := LoadFromEnv()
+	if err == nil || err.Error() != "LOGIN_PASSWORD is required when AUTH_ENABLED is true" {
+		t.Fatalf("expected LOGIN_PASSWORD required error, got %v", err)
 	}
 }
 
