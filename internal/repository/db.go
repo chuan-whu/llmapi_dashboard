@@ -73,6 +73,68 @@ func OpenDatabase(cfg config.Config) (*gorm.DB, error) {
 	return db, nil
 }
 
+// OpenReadOnlyDatabase opens an existing Keeper SQLite database without
+// migrations, WAL changes, aggregation catch-up, or any other schema writes.
+func OpenReadOnlyDatabase(cfg config.Config) (*gorm.DB, error) {
+	if exists, err := sqliteDatabaseFileExists(cfg.SQLitePath); err != nil {
+		return nil, err
+	} else if !exists {
+		return nil, fmt.Errorf("sqlite database %s does not exist", filepath.Clean(cfg.SQLitePath))
+	}
+
+	db, err := gorm.Open(sqlite.Open(readOnlySQLiteDSN(cfg.SQLitePath)), &gorm.Config{NowFunc: func() time.Time { return timeutil.NormalizeStorageTime(time.Now()) }})
+	if err != nil {
+		return nil, fmt.Errorf("open read-only sqlite database %s: %w", filepath.Clean(cfg.SQLitePath), err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("configure read-only sqlite database: %w", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+
+	if err := db.Exec("PRAGMA query_only=ON").Error; err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("enable sqlite read-only query mode: %w", err)
+	}
+	if err := db.Exec("PRAGMA busy_timeout=5000").Error; err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("set sqlite busy timeout: %w", err)
+	}
+	if err := db.Exec("PRAGMA foreign_keys=ON").Error; err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("enable sqlite foreign keys: %w", err)
+	}
+	if err := validateKeeperReadOnlyTables(db, cfg.SQLitePath); err != nil {
+		_ = sqlDB.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
+func validateKeeperReadOnlyTables(db *gorm.DB, path string) error {
+	requiredTables := []string{
+		"usage_events",
+		"usage_overview_hourly_stats",
+		"usage_overview_daily_stats",
+		"usage_overview_health_stats",
+	}
+	missing := make([]string, 0)
+	for _, table := range requiredTables {
+		var count int64
+		if err := db.Raw("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&count).Error; err != nil {
+			return fmt.Errorf("check Keeper table %s: %w", table, err)
+		}
+		if count == 0 {
+			missing = append(missing, table)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("sqlite database %s is not a supported Keeper app.db; missing tables: %s", filepath.Clean(path), strings.Join(missing, ", "))
+	}
+	return nil
+}
+
 // sqliteDSN 在调用方没有自定义 query 参数时追加 SQLite 连接级默认参数。
 func sqliteDSN(path string) string {
 	// 保留调用方显式传入的 DSN 参数，避免覆盖测试或特殊部署配置。
@@ -81,6 +143,19 @@ func sqliteDSN(path string) string {
 		return trimmed
 	}
 	return trimmed + "?_busy_timeout=5000&_foreign_keys=on"
+}
+
+func readOnlySQLiteDSN(path string) string {
+	trimmed := strings.TrimSpace(path)
+	if strings.HasPrefix(trimmed, "file:") {
+		separator := "?"
+		if strings.Contains(trimmed, "?") {
+			separator = "&"
+		}
+		return trimmed + separator + "mode=ro&_busy_timeout=5000&_foreign_keys=on"
+	}
+	cleaned := filepath.ToSlash(trimmed)
+	return "file:" + cleaned + "?mode=ro&_busy_timeout=5000&_foreign_keys=on"
 }
 
 // sqliteDatabaseFileExists 判断磁盘数据库文件是否存在；内存库和空路径都按新库处理。

@@ -26,7 +26,7 @@ describe('UsagePage toolbar styles', () => {
   })
 
   it('keeps refresh controls outside the query filter layout', () => {
-    expect(usagePageSource).toContain('{showRangeControls && (\n                  <div className={styles.usageFilterBar}>')
+    expect(usagePageSource).toContain('<div className={styles.usageFilterBar}>')
     expect(usagePageSource).toContain('className={styles.usageRefreshSlot}')
     expect(usagePageSource).not.toContain('styles.usageFilterBarCollapsed')
     expect(usagePageStyles).toMatch(/\.usageRefreshSlot\s*\{[\s\S]*?flex:\s*0 0 auto;/)
@@ -55,14 +55,16 @@ describe('UsagePage toolbar styles', () => {
     expect(i18nSource).not.toContain("tab_analysis: 'API & Models'")
     expect(i18nSource).not.toContain("tab_analysis: 'API 与模型'")
     expect(i18nSource).not.toContain("tab_analysis: 'API 與模型'")
-    expect(usagePageSource).toContain("const USAGE_TAB_OPTIONS = ['overview', 'analysis', 'events', 'auth-files', 'ai-provider', 'settings'] as const")
+    expect(usagePageSource).toContain("const USAGE_TAB_OPTIONS = ['overview', 'analysis', 'events'] as const")
   })
 
-  it('keeps Sign out as the rightmost header action after Check Updates', () => {
-    expect(usagePageSource).toContain("import { ApiError, fetchAnalysis, fetchCpaApiKeyOptions, fetchCpaApiKeys, fetchStatus, fetchUpdateCheck, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout, markStatusActive, updateCpaApiKeyAlias } from '@/lib/api';")
-    expect(usagePageSource.indexOf("t('usage_stats.check_updates')")).toBeLessThan(usagePageSource.indexOf("t('common.logout')"))
-    expect(usagePageStyles).toContain('.signOutSwitcher')
-    expect(usagePageStyles).toContain('.signOutPill')
+  it('removes authenticated management actions from the read-only dashboard header', () => {
+    expect(usagePageSource).toContain("import { ApiError, fetchAnalysis, fetchCpaApiKeyOptions, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents } from '@/lib/api';")
+    expect(usagePageSource).not.toContain("t('usage_stats.check_updates')")
+    expect(usagePageSource).not.toContain("t('common.logout')")
+    expect(usagePageSource).not.toContain('fetchUpdateCheck')
+    expect(usagePageSource).not.toContain('logout')
+    expect(usagePageSource).not.toContain('markStatusActive')
   })
 
   it('keeps mobile tab labels on one line without changing desktop tab sizing', () => {

@@ -48,6 +48,33 @@ type OptionalProviders struct {
 	Status        StatusRouteConfig
 }
 
+func NewReadOnlyRouter(
+	staticFS fs.FS,
+	usageProvider service.UsageProvider,
+	usageIdentityProvider service.UsageIdentityProvider,
+	cpaAPIKeyProvider service.CPAAPIKeyProvider,
+	basePath string,
+) *gin.Engine {
+	router := gin.New()
+	_ = router.SetTrustedProxies(nil)
+	router.Use(gin.Recovery())
+
+	appGroup := router.Group(basePath)
+	registerHealthRoutes(appGroup)
+
+	apiV1 := appGroup.Group("/api/v1")
+	apiV1.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+	registerReadOnlyStatusRoute(apiV1)
+	registerUsageOverviewRoute(apiV1, usageProvider)
+	registerUsageAnalysisRoute(apiV1, usageProvider, cpaAPIKeyProvider)
+	registerUsageEventsRoute(apiV1, usageProvider, usageIdentityProvider, cpaAPIKeyProvider)
+	registerCPAAPIKeyOptionRoutes(apiV1, cpaAPIKeyProvider)
+	registerStaticRoutes(router, appGroup, staticFS, basePath)
+	return router
+}
+
 func NewRouter(
 	staticFS fs.FS,
 	statusProvider StatusProvider,
@@ -105,58 +132,65 @@ func NewRouter(
 	registerKeyOverviewRoute(keyViewerProtected, usageProvider, cpaAPIKeyProvider, authHandler)
 
 	if staticFS != nil {
-		if indexFile, err := staticFS.Open("index.html"); err == nil {
-			_ = indexFile.Close()
-			httpFS := http.FS(staticFS)
-			serveIndex := func(c *gin.Context) {
-				indexHTML, err := renderIndexHTML(staticFS, basePath)
-				if err != nil {
-					c.Status(http.StatusNotFound)
-					return
-				}
-				setHTMLCacheHeaders(c)
-				c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
+		registerStaticRoutes(router, appGroup, staticFS, basePath)
+	}
+
+	return router
+}
+
+func registerStaticRoutes(router *gin.Engine, appGroup *gin.RouterGroup, staticFS fs.FS, basePath string) {
+	if staticFS == nil {
+		return
+	}
+	if indexFile, err := staticFS.Open("index.html"); err == nil {
+		_ = indexFile.Close()
+		httpFS := http.FS(staticFS)
+		serveIndex := func(c *gin.Context) {
+			indexHTML, err := renderIndexHTML(staticFS, basePath)
+			if err != nil {
+				c.Status(http.StatusNotFound)
+				return
 			}
-			serveAsset := func(c *gin.Context) {
-				assetPath := "assets/" + strings.TrimPrefix(c.Param("filepath"), "/")
+			setHTMLCacheHeaders(c)
+			c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
+		}
+		serveAsset := func(c *gin.Context) {
+			assetPath := "assets/" + strings.TrimPrefix(c.Param("filepath"), "/")
+			if assetFile, err := staticFS.Open(assetPath); err == nil {
+				_ = assetFile.Close()
+				setStaticAssetCacheHeaders(c)
+				c.FileFromFS(assetPath, httpFS)
+				return
+			}
+			c.Status(http.StatusNotFound)
+		}
+
+		appGroup.GET("/", serveIndex)
+		appGroup.GET("/assets/*filepath", serveAsset)
+		appGroup.HEAD("/assets/*filepath", serveAsset)
+		router.NoRoute(func(c *gin.Context) {
+			requestPath, ok := stripBasePath(basePath, c.Request.URL.Path)
+			if !ok {
+				c.Status(http.StatusNotFound)
+				return
+			}
+			if strings.HasPrefix(requestPath, "/api/") {
+				c.Status(http.StatusNotFound)
+				return
+			}
+
+			if assetPath, ok := staticAssetPath(requestPath); ok {
 				if assetFile, err := staticFS.Open(assetPath); err == nil {
 					_ = assetFile.Close()
 					setStaticAssetCacheHeaders(c)
 					c.FileFromFS(assetPath, httpFS)
 					return
 				}
-				c.Status(http.StatusNotFound)
 			}
 
-			appGroup.GET("/", serveIndex)
-			appGroup.GET("/assets/*filepath", serveAsset)
-			appGroup.HEAD("/assets/*filepath", serveAsset)
-			router.NoRoute(func(c *gin.Context) {
-				requestPath, ok := stripBasePath(basePath, c.Request.URL.Path)
-				if !ok {
-					c.Status(http.StatusNotFound)
-					return
-				}
-				if strings.HasPrefix(requestPath, "/api/") {
-					c.Status(http.StatusNotFound)
-					return
-				}
-
-				if assetPath, ok := staticAssetPath(requestPath); ok {
-					if assetFile, err := staticFS.Open(assetPath); err == nil {
-						_ = assetFile.Close()
-						setStaticAssetCacheHeaders(c)
-						c.FileFromFS(assetPath, httpFS)
-						return
-					}
-				}
-
-				serveIndex(c)
-			})
-		}
+			serveIndex(c)
+		})
 	}
-
-	return router
 }
 
 func setHTMLCacheHeaders(c *gin.Context) {
@@ -256,6 +290,18 @@ func registerStatusRoutes(router gin.IRoutes, statusProvider StatusProvider, con
 			config.ActiveRecorder.RecordActiveStatus(time.Now())
 		}
 		c.Status(http.StatusNoContent)
+	})
+}
+
+func registerReadOnlyStatusRoute(router gin.IRoutes) {
+	router.GET("/status", func(c *gin.Context) {
+		c.JSON(http.StatusOK, statusResponse{
+			Running:            false,
+			SyncRunning:        false,
+			Timezone:           time.Local.String(),
+			Version:            version.Version,
+			UpdateCheckEnabled: false,
+		})
 	})
 }
 

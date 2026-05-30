@@ -5,6 +5,7 @@ import (
 	"context"
 	"cpa-usage-keeper/internal/repository/dto"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"cpa-usage-keeper/internal/cpa"
 	"cpa-usage-keeper/internal/entities"
 	"github.com/sirupsen/logrus"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -134,6 +136,66 @@ func TestOpenDatabaseConfiguresSQLiteRuntime(t *testing.T) {
 	}
 	if stats := sqlDB.Stats(); stats.MaxOpenConnections != 1 {
 		t.Fatalf("expected sqlite max open connections to be 1, got %+v", stats)
+	}
+}
+
+func TestOpenReadOnlyDatabaseDoesNotCreateOrMigrateDatabase(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "missing.db")
+
+	_, err := OpenReadOnlyDatabase(config.Config{SQLitePath: dbPath})
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("expected missing database error, got %v", err)
+	}
+	if _, statErr := os.Stat(dbPath); !os.IsNotExist(statErr) {
+		t.Fatalf("expected read-only open not to create database, stat err=%v", statErr)
+	}
+}
+
+func TestOpenReadOnlyDatabaseRejectsWrites(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "app.db")
+	seedDB, err := OpenDatabase(config.Config{SQLitePath: dbPath})
+	if err != nil {
+		t.Fatalf("OpenDatabase returned error: %v", err)
+	}
+	seedSQL, err := seedDB.DB()
+	if err != nil {
+		t.Fatalf("load seed sql db: %v", err)
+	}
+	if err := seedSQL.Close(); err != nil {
+		t.Fatalf("close seed database: %v", err)
+	}
+
+	db, err := OpenReadOnlyDatabase(config.Config{SQLitePath: dbPath})
+	if err != nil {
+		t.Fatalf("OpenReadOnlyDatabase returned error: %v", err)
+	}
+	closeTestDatabase(t, db)
+
+	if err := db.Create(&entities.UsageEvent{EventKey: "readonly-write", Timestamp: time.Now()}).Error; err == nil {
+		t.Fatal("expected write through read-only database to fail")
+	}
+}
+
+func TestOpenReadOnlyDatabaseRejectsNonKeeperSQLiteDatabase(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "other.db")
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite database: %v", err)
+	}
+	if err := db.Exec("CREATE TABLE unrelated (id INTEGER PRIMARY KEY)").Error; err != nil {
+		t.Fatalf("create unrelated table: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("load sql db: %v", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatalf("close sqlite database: %v", err)
+	}
+
+	_, err = OpenReadOnlyDatabase(config.Config{SQLitePath: dbPath})
+	if err == nil || !strings.Contains(err.Error(), "not a supported Keeper app.db") || !strings.Contains(err.Error(), "usage_events") {
+		t.Fatalf("expected unsupported Keeper database error, got %v", err)
 	}
 }
 

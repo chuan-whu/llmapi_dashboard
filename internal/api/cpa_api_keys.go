@@ -97,6 +97,16 @@ func registerCPAAPIKeyRoutes(router gin.IRoutes, provider service.CPAAPIKeyProvi
 	})
 }
 
+func registerCPAAPIKeyOptionRoutes(router gin.IRoutes, provider service.CPAAPIKeyProvider) {
+	router.GET("/usage/api-keys/options", func(c *gin.Context) {
+		rows, err := listCPAAPIKeyOptionRows(c, provider)
+		if err != nil {
+			return
+		}
+		c.JSON(http.StatusOK, cpaAPIKeyOptionsResponse{Options: rows})
+	})
+}
+
 func listCPAAPIKeyRows(c *gin.Context, provider service.CPAAPIKeyProvider) ([]cpaAPIKeyResponse, error) {
 	if provider == nil {
 		return []cpaAPIKeyResponse{}, nil
