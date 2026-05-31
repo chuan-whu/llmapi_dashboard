@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1.7
+
+FROM node:22-bookworm-slim AS web-builder
+WORKDIR /src/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+FROM ubuntu:24.04 AS go-builder
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+ARG VERSION=dev
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CGO_ENABLED=1
+ENV GOOS=${TARGETOS}
+ENV GOARCH=${TARGETARCH}
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gcc \
+        libc6-dev \
+        make \
+        xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+ARG GO_VERSION=1.22.12
+RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tgz \
+    && tar -C /usr/local -xzf /tmp/go.tgz \
+    && rm /tmp/go.tgz
+ENV PATH=/usr/local/go/bin:${PATH}
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+COPY web/static.go ./web/static.go
+COPY --from=web-builder /src/web/dist ./web/dist
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    go build -trimpath \
+      -ldflags="-s -w -X cpa-usage-keeper/internal/version.Version=${VERSION}" \
+      -o "/out/cpa-usage-keeper-${TARGETOS}-${TARGETARCH}" \
+      ./cmd/server
+
+FROM scratch AS artifact
+COPY --from=go-builder /out/ /
