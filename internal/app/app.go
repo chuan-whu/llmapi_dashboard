@@ -110,6 +110,7 @@ func NewWithConfig(cfg config.Config) (*App, error) {
 			authConfig,
 			authHandler,
 			cfg.AppBasePath,
+			api.TutorialPDFConfig{Path: cfg.TutorialPDFPath},
 			pricingService,
 			availableModelsService,
 		),

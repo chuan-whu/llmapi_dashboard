@@ -11,7 +11,7 @@ import (
 var configEnvKeys = []string{
 	"APP_DB_PATH", "APP_PORT", "APP_BASE_PATH", "TZ",
 	"BASE_URL", "KEY", "CPA_BASE_URL", "CPA_MANAGEMENT_KEY", "AUTH_ENABLED", "LOGIN_PASSWORD", "AUTH_SESSION_TTL",
-	"WORK_DIR", "LOG_FILE_ENABLED", "BACKUP_ENABLED", "REDIS_QUEUE_ADDR",
+	"WORK_DIR", "LOG_FILE_ENABLED", "BACKUP_ENABLED", "REDIS_QUEUE_ADDR", "TUTORIAL_PDF_PATH",
 }
 
 func TestMain(m *testing.M) {
@@ -118,7 +118,7 @@ func TestLoadReadsSpecifiedEnvFileAndResolvesDBPath(t *testing.T) {
 	withIsolatedEnvFiles(t)
 	envDir := t.TempDir()
 	envPath := filepath.Join(envDir, "custom.env")
-	if err := os.WriteFile(envPath, []byte("APP_DB_PATH=./snapshots/app.db\nAPP_PORT=9091\nAPP_BASE_PATH=/keeper/\n"), 0o600); err != nil {
+	if err := os.WriteFile(envPath, []byte("APP_DB_PATH=./snapshots/app.db\nAPP_PORT=9091\nAPP_BASE_PATH=/keeper/\nTUTORIAL_PDF_PATH=./guidance.pdf\n"), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
 
@@ -127,7 +127,7 @@ func TestLoadReadsSpecifiedEnvFileAndResolvesDBPath(t *testing.T) {
 		t.Fatalf("Load returned error: %v", err)
 	}
 
-	if cfg.SQLitePath != filepath.Join(envDir, "snapshots", "app.db") || cfg.AppPort != "9091" || cfg.AppBasePath != "/keeper" {
+	if cfg.SQLitePath != filepath.Join(envDir, "snapshots", "app.db") || cfg.AppPort != "9091" || cfg.AppBasePath != "/keeper" || cfg.TutorialPDFPath != filepath.Join(envDir, "guidance.pdf") {
 		t.Fatalf("unexpected config from env file: %+v", cfg)
 	}
 }

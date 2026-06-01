@@ -11,10 +11,12 @@ export class ApiError extends Error {
 }
 
 const APP_BASE_PATH_PLACEHOLDER = '__APP_BASE_PATH__'
+const TUTORIAL_PDF_URL_PLACEHOLDER = '__TUTORIAL_PDF_URL__'
 
 declare global {
   interface Window {
     __APP_BASE_PATH__?: string
+    __TUTORIAL_PDF_URL__?: string
   }
 }
 
@@ -33,6 +35,14 @@ export function appPath(path: string): string {
 export function apiPath(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return `${normalizeBasePath(window.__APP_BASE_PATH__)}/api/v1${normalizedPath}`
+}
+
+export function tutorialPDFURL(): string {
+  const value = window.__TUTORIAL_PDF_URL__?.trim()
+  if (!value || value === TUTORIAL_PDF_URL_PLACEHOLDER) {
+    return ''
+  }
+  return value
 }
 
 async function parseApiError(response: Response, fallback: string): Promise<never> {

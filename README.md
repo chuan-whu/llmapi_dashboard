@@ -157,8 +157,10 @@ Only the following application settings are used:
 | `AUTH_ENABLED` | No | `false` | Whether to enable login protection; recommended for public deployments |
 | `LOGIN_PASSWORD` | Yes when auth is enabled | - | Admin login password |
 | `AUTH_SESSION_TTL` | No | `168h` | Login session lifetime |
+| `TUTORIAL_PDF_PATH` | No | empty | Local PDF path for the top-bar usage guide link; served inline in the browser |
 
 `APP_BASE_PATH` must be empty or start with `/`; for example `/keeper`. `/keeper/` is normalized to `/keeper`.
+Relative `TUTORIAL_PDF_PATH` values are resolved from the `.env` file directory.
 
 ## Nginx Reverse Proxy
 

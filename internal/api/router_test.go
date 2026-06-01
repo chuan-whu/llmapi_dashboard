@@ -4,10 +4,13 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 	"time"
 
+	"cpa-usage-keeper/internal/auth"
 	"cpa-usage-keeper/internal/poller"
 	"cpa-usage-keeper/internal/version"
 	"github.com/gin-gonic/gin"
@@ -266,18 +269,20 @@ func TestSubpathRoutesOnlyServePrefixedEndpoints(t *testing.T) {
 
 func TestSubpathStaticRoutesServeOnlyUnderPrefix(t *testing.T) {
 	staticFS := testStaticFS(t, map[string]string{
-		"index.html":    `<html><head><script>window.__APP_BASE_PATH__ = "__APP_BASE_PATH__";</script></head><body>app</body></html>`,
+		"index.html":    `<html><head><script>window.__APP_BASE_PATH__ = "__APP_BASE_PATH__"; window.__TUTORIAL_PDF_URL__ = "__TUTORIAL_PDF_URL__";</script></head><body>app</body></html>`,
 		"assets/app.js": "console.log('ok')",
 	})
 
-	router := NewRouter(staticFS, nil, nil, nil, AuthConfig{BasePath: "/cpa"}, nil, "/cpa")
+	router := NewRouter(staticFS, nil, nil, nil, AuthConfig{BasePath: "/cpa"}, nil, "/cpa", OptionalProviders{
+		TutorialPDFPath: filepath.Join(t.TempDir(), "guidance.pdf"),
+	})
 
 	for _, testCase := range []struct {
 		path       string
 		statusCode int
 		contains   string
 	}{
-		{path: "/cpa/", statusCode: http.StatusOK, contains: `window.__APP_BASE_PATH__ = "/cpa";`},
+		{path: "/cpa/", statusCode: http.StatusOK, contains: `window.__TUTORIAL_PDF_URL__ = "/cpa/api/v1/tutorial.pdf";`},
 		{path: "/cpa/dashboard", statusCode: http.StatusOK, contains: `window.__APP_BASE_PATH__ = "/cpa";`},
 		{path: "/cpa/assets/app.js", statusCode: http.StatusOK, contains: "console.log('ok')"},
 		{path: "/cpa/missing.html", statusCode: http.StatusOK, contains: `window.__APP_BASE_PATH__ = "/cpa";`},
@@ -311,7 +316,7 @@ func TestStaticAssetPathRejectsBackslashTraversal(t *testing.T) {
 
 func TestRootStaticRouteInjectsEmptyBasePath(t *testing.T) {
 	staticFS := testStaticFS(t, map[string]string{
-		"index.html": `<html><head><script>window.__APP_BASE_PATH__ = "__APP_BASE_PATH__";</script></head><body>app</body></html>`,
+		"index.html": `<html><head><script>window.__APP_BASE_PATH__ = "__APP_BASE_PATH__"; window.__TUTORIAL_PDF_URL__ = "__TUTORIAL_PDF_URL__";</script></head><body>app</body></html>`,
 	})
 
 	router := NewRouter(staticFS, nil, nil, nil, AuthConfig{}, nil, "")
@@ -324,6 +329,98 @@ func TestRootStaticRouteInjectsEmptyBasePath(t *testing.T) {
 	}
 	if !contains(resp.Body.String(), `window.__APP_BASE_PATH__ = "";`) {
 		t.Fatalf("expected injected empty base path, got %s", resp.Body.String())
+	}
+	if !contains(resp.Body.String(), `window.__TUTORIAL_PDF_URL__ = "";`) {
+		t.Fatalf("expected injected empty tutorial URL, got %s", resp.Body.String())
+	}
+}
+
+func TestTutorialPDFRouteServesConfiguredPDFInline(t *testing.T) {
+	pdfBytes := []byte("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n")
+	pdfPath := filepath.Join(t.TempDir(), "guidance.pdf")
+	if err := os.WriteFile(pdfPath, pdfBytes, 0o600); err != nil {
+		t.Fatalf("write pdf: %v", err)
+	}
+
+	router := NewReadOnlyRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", TutorialPDFConfig{Path: pdfPath})
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tutorial.pdf", nil)
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if got := resp.Header().Get("Content-Type"); got != "application/pdf" {
+		t.Fatalf("expected PDF content type, got %q", got)
+	}
+	if got := resp.Header().Get("Content-Disposition"); !contains(got, "inline") || !contains(got, "guidance.pdf") {
+		t.Fatalf("expected inline PDF content disposition, got %q", got)
+	}
+	if got := resp.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("expected PDF response to bypass cache, got %q", got)
+	}
+	if got := resp.Header().Get("Pragma"); got != "no-cache" {
+		t.Fatalf("expected PDF response pragma no-cache, got %q", got)
+	}
+	if resp.Body.String() != string(pdfBytes) {
+		t.Fatalf("unexpected PDF body: %q", resp.Body.String())
+	}
+}
+
+func TestTutorialPDFURLIncludesPDFModificationVersion(t *testing.T) {
+	tempDir := t.TempDir()
+	pdfPath := filepath.Join(tempDir, "guidance.pdf")
+	if err := os.WriteFile(pdfPath, []byte("%PDF-1.7\n%%EOF\n"), 0o600); err != nil {
+		t.Fatalf("write pdf: %v", err)
+	}
+	modTime := time.Date(2026, 6, 1, 10, 11, 12, 0, time.UTC)
+	if err := os.Chtimes(pdfPath, modTime, modTime); err != nil {
+		t.Fatalf("set pdf mtime: %v", err)
+	}
+
+	got := tutorialPDFURL("/usage", TutorialPDFConfig{Path: pdfPath})
+
+	want := "/usage/api/v1/tutorial.pdf?v=1780308672000000000"
+	if got != want {
+		t.Fatalf("expected tutorial URL %q, got %q", want, got)
+	}
+}
+
+func TestTutorialPDFRouteRequiresAdminSessionWhenAuthEnabled(t *testing.T) {
+	pdfPath := filepath.Join(t.TempDir(), "guidance.pdf")
+	if err := os.WriteFile(pdfPath, []byte("%PDF-1.7\n%%EOF\n"), 0o600); err != nil {
+		t.Fatalf("write pdf: %v", err)
+	}
+	authConfig := AuthConfig{Enabled: true, LoginPassword: "secret", SessionTTL: time.Hour}
+	router := NewReadOnlyRouter(nil, nil, nil, nil, authConfig, NewAuthHandler(authConfig, auth.NewSessionManager(time.Hour)), "", TutorialPDFConfig{Path: pdfPath})
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tutorial.pdf", nil)
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d body=%s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestTutorialPDFRouteReturnsNotFoundWhenUnsetOrMissing(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		config TutorialPDFConfig
+	}{
+		{name: "unset", config: TutorialPDFConfig{}},
+		{name: "missing", config: TutorialPDFConfig{Path: filepath.Join(t.TempDir(), "missing.pdf")}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			router := NewReadOnlyRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", testCase.config)
+			resp := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/tutorial.pdf", nil)
+			router.ServeHTTP(resp, req)
+
+			if resp.Code != http.StatusNotFound {
+				t.Fatalf("expected status 404, got %d body=%s", resp.Code, resp.Body.String())
+			}
+		})
 	}
 }
 

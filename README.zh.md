@@ -157,8 +157,10 @@ sudo systemctl restart cpa-usage-keeper
 | `AUTH_ENABLED` | 否 | `false` | 是否启用登录保护；公网部署建议设为 `true` |
 | `LOGIN_PASSWORD` | 启用登录保护时是 | - | 管理员登录密码 |
 | `AUTH_SESSION_TTL` | 否 | `168h` | 登录 session 有效时长 |
+| `TUTORIAL_PDF_PATH` | 否 | 空 | 顶部使用教程链接对应的本地 PDF 路径；浏览器内联阅读 |
 
 `APP_BASE_PATH` 必须为空或以 `/` 开头；例如 `/keeper`，`/keeper/` 会规范为 `/keeper`。
+相对形式的 `TUTORIAL_PDF_PATH` 会按 `.env` 所在目录解析。
 
 ## Nginx 反代
 

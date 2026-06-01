@@ -59,7 +59,7 @@ describe('UsagePage toolbar styles', () => {
   })
 
   it('keeps login protection controls without restoring CPA management actions', () => {
-    expect(usagePageSource).toContain("fetchUsageEvents, logout } from '@/lib/api';")
+    expect(usagePageSource).toMatch(/import \{[^}]*fetchUsageEvents[^}]*logout[^}]*\} from '@\/lib\/api';/)
     expect(usagePageSource).not.toContain("t('usage_stats.check_updates')")
     expect(usagePageSource).toContain("t('common.logout')")
     expect(usagePageSource).not.toContain('fetchUpdateCheck')
@@ -69,10 +69,18 @@ describe('UsagePage toolbar styles', () => {
   it('uses the styled top bar classes so header controls stay aligned', () => {
     expect(usagePageSource).toContain('className={styles.pageFrame}')
     expect(usagePageSource).toContain('className={styles.topBar}')
+    expect(usagePageSource).toContain('className={styles.topBarCenter}')
     expect(usagePageSource).toContain('className={styles.topBarActions}')
+    expect(usagePageSource).toContain("t('usage_stats.tutorial_link')")
     expect(usagePageSource).not.toContain('styles.dashboardLayout')
     expect(usagePageSource).not.toContain('styles.headerControls')
+    expect(usagePageStyles).toMatch(/grid-template-columns:\s*minmax\(0,\s*auto\)\s+minmax\(160px,\s*1fr\)\s+minmax\(0,\s*auto\);/)
     expect(usagePageStyles).toMatch(/\.topBar\s*\{[\s\S]*?align-items:\s*center;/)
+    expect(usagePageStyles).toMatch(/\.topBarCenter\s*\{[\s\S]*?justify-content:\s*center;/)
+    expect(usagePageStyles).toMatch(/\.tutorialLink\s*\{[\s\S]*?white-space:\s*nowrap;/)
+    expect(usagePageStyles).toMatch(/\.tutorialLink\s*\{[\s\S]*?background:\s*linear-gradient\(135deg,\s*var\(--primary-color\),/)
+    expect(usagePageStyles).toMatch(/\.tutorialLink\s*\{[\s\S]*?color:\s*#fff;/)
+    expect(usagePageStyles).toMatch(/\.tutorialLink\s*\{[\s\S]*?box-shadow:\s*0 12px 24px rgba\(79,\s*70,\s*229,\s*0\.28\),/)
     expect(usagePageStyles).toMatch(/\.topBarActions\s*\{[\s\S]*?align-items:\s*center;/)
     expect(usagePageStyles).toContain('.headerLanguageSwitcher')
   })

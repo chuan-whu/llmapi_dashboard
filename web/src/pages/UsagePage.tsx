@@ -14,7 +14,7 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { ApiError, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchPricing, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout } from '@/lib/api';
+import { ApiError, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchPricing, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout, tutorialPDFURL } from '@/lib/api';
 import type { AnalysisResponse, CpaApiKeyOption, PricingEntry, UsageEvent, UsageSourceFilterOption } from '@/lib/types';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
@@ -889,6 +889,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const timeRangeOptions = useMemo(() => getTimeRangeOptions(t), [t]);
   const themeOptions = useMemo(() => THEME_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) })), [t]);
   const apiKeySelectOptions = useMemo(() => getApiKeySelectOptions(apiKeyOptions, t), [apiKeyOptions, t]);
+  const tutorialURL = tutorialPDFURL();
   const lastSyncAt = lastRefreshedAt;
 
   const handleCustomDateInputActivate = (event: SyntheticEvent<HTMLInputElement>) => {
@@ -907,6 +908,13 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
         <header className={styles.topBar}>
           <div className={styles.brandBlock}>
             <BrandLink className={styles.eyebrow} />
+          </div>
+          <div className={styles.topBarCenter}>
+            {tutorialURL && (
+              <a className={styles.tutorialLink} href={tutorialURL} target="_blank" rel="noreferrer">
+                {t('usage_stats.tutorial_link')}
+              </a>
+            )}
           </div>
           <div className={styles.topBarActions}>
             <LanguageSwitcher className={styles.headerLanguageSwitcher} />

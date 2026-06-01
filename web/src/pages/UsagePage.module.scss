@@ -26,8 +26,8 @@
   position: sticky;
   top: 16px;
   z-index: 10;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(160px, 1fr) minmax(0, auto);
   align-items: center;
   gap: 18px;
   padding: 18px 20px;
@@ -42,7 +42,7 @@
     position: static;
     padding: 16px;
     border-radius: 20px;
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
   }
 }
@@ -75,6 +75,54 @@
   white-space: nowrap;
 }
 
+.topBarCenter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+
+  @include mobile {
+    order: 2;
+  }
+}
+
+.tutorialLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  max-width: 100%;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 78%, #ffffff);
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary-color), color-mix(in srgb, var(--primary-color) 72%, #0f172a));
+  box-shadow:
+    0 12px 24px rgba(79, 70, 229, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.18) inset;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+
+  &:hover {
+    color: #fff;
+    filter: brightness(1.04);
+    box-shadow:
+      0 16px 30px rgba(79, 70, 229, 0.34),
+      0 1px 0 rgba(255, 255, 255, 0.2) inset;
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+}
+
 .topBarActions {
   display: flex;
   align-items: center;
@@ -84,6 +132,7 @@
 
   @include mobile {
     justify-content: space-between;
+    order: 3;
   }
 }
 

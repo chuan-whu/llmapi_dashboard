@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { appPath, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchCpaApiKeys, fetchKeyOverview, fetchUsageOverview, fetchUsageQuotaCache, fetchUpdateCheck, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, fetchUsageIdentities, fetchUsageIdentitiesPage, fetchUsageQuotaRefreshTask, loginWithCPAAPIKey, logout, markStatusActive, refreshUsageQuotas, updateCpaApiKeyAlias } from './api';
+import { appPath, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchCpaApiKeys, fetchKeyOverview, fetchUsageOverview, fetchUsageQuotaCache, fetchUpdateCheck, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, fetchUsageIdentities, fetchUsageIdentitiesPage, fetchUsageQuotaRefreshTask, loginWithCPAAPIKey, logout, markStatusActive, refreshUsageQuotas, tutorialPDFURL, updateCpaApiKeyAlias } from './api';
 
 describe('fetchUsageEvents', () => {
   afterEach(() => {
@@ -12,6 +12,17 @@ describe('fetchUsageEvents', () => {
 
     expect(appPath('/key-overview')).toBe('/keeper/key-overview');
     expect(appPath('key-overview')).toBe('/keeper/key-overview');
+  });
+
+  it('reads the runtime tutorial PDF URL only when configured', () => {
+    vi.stubGlobal('window', { __TUTORIAL_PDF_URL__: '/keeper/api/v1/tutorial.pdf' });
+    expect(tutorialPDFURL()).toBe('/keeper/api/v1/tutorial.pdf');
+
+    vi.stubGlobal('window', { __TUTORIAL_PDF_URL__: '__TUTORIAL_PDF_URL__' });
+    expect(tutorialPDFURL()).toBe('');
+
+    vi.stubGlobal('window', { __TUTORIAL_PDF_URL__: '   ' });
+    expect(tutorialPDFURL()).toBe('');
   });
 
   it('posts CPA API key logins to the dedicated auth endpoint', async () => {

@@ -5,8 +5,11 @@ import (
 	"context"
 	"io"
 	"io/fs"
+	"mime"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +24,8 @@ import (
 )
 
 const appBasePathPlaceholder = "__APP_BASE_PATH__"
+const tutorialPDFURLPlaceholder = "__TUTORIAL_PDF_URL__"
+const tutorialPDFRoutePath = "/api/v1/tutorial.pdf"
 
 type StatusProvider interface {
 	Status() poller.Status
@@ -41,11 +46,16 @@ type StatusRouteConfig struct {
 	ActiveRecorder ActiveStatusRecorder
 }
 
+type TutorialPDFConfig struct {
+	Path string
+}
+
 type OptionalProviders struct {
-	UsageIdentity service.UsageIdentityProvider
-	Quota         QuotaProvider
-	CPAAPIKeys    service.CPAAPIKeyProvider
-	Status        StatusRouteConfig
+	UsageIdentity   service.UsageIdentityProvider
+	Quota           QuotaProvider
+	CPAAPIKeys      service.CPAAPIKeyProvider
+	Status          StatusRouteConfig
+	TutorialPDFPath string
 }
 
 func NewReadOnlyRouter(
@@ -82,6 +92,7 @@ func NewReadOnlyRouter(
 	protected.Use(authHandler.adminMiddleware())
 	var pricingProvider service.PricingProvider
 	var availableModelsProvider service.AvailableModelsProvider
+	var tutorialPDFConfig TutorialPDFConfig
 	for _, provider := range readOnlyProviders {
 		if typed, ok := provider.(service.PricingProvider); ok {
 			pricingProvider = typed
@@ -89,8 +100,12 @@ func NewReadOnlyRouter(
 		if typed, ok := provider.(service.AvailableModelsProvider); ok {
 			availableModelsProvider = typed
 		}
+		if typed, ok := provider.(TutorialPDFConfig); ok {
+			tutorialPDFConfig = typed
+		}
 	}
 	registerReadOnlyStatusRoute(protected)
+	registerTutorialPDFRoute(protected, tutorialPDFConfig)
 	registerUsageOverviewRoute(protected, usageProvider)
 	registerUsageAnalysisRoute(protected, usageProvider, cpaAPIKeyProvider)
 	registerUsageEventsRoute(protected, usageProvider, usageIdentityProvider, cpaAPIKeyProvider)
@@ -98,7 +113,7 @@ func NewReadOnlyRouter(
 	registerCPAAPIKeyOptionRoutes(protected, cpaAPIKeyProvider)
 	registerReadOnlyPricingRoutes(protected, pricingProvider)
 	registerAvailableModelsRoutes(protected, availableModelsProvider)
-	registerStaticRoutes(router, appGroup, staticFS, basePath)
+	registerStaticRoutes(router, appGroup, staticFS, basePath, tutorialPDFConfig)
 	return router
 }
 
@@ -134,11 +149,13 @@ func NewRouter(
 	var quotaProvider QuotaProvider
 	var cpaAPIKeyProvider service.CPAAPIKeyProvider
 	var statusConfig StatusRouteConfig
+	var tutorialPDFConfig TutorialPDFConfig
 	if len(optionalProviders) > 0 {
 		usageIdentityProvider = optionalProviders[0].UsageIdentity
 		quotaProvider = optionalProviders[0].Quota
 		cpaAPIKeyProvider = optionalProviders[0].CPAAPIKeys
 		statusConfig = optionalProviders[0].Status
+		tutorialPDFConfig = TutorialPDFConfig{Path: optionalProviders[0].TutorialPDFPath}
 	}
 	authHandler.setCPAAPIKeyProvider(cpaAPIKeyProvider)
 
@@ -153,19 +170,20 @@ func NewRouter(
 	registerCPAAPIKeyRoutes(adminProtected, cpaAPIKeyProvider)
 	registerPricingRoutes(adminProtected, pricingProvider)
 	registerQuotaRoutes(adminProtected, quotaProvider)
+	registerTutorialPDFRoute(adminProtected, tutorialPDFConfig)
 
 	keyViewerProtected := apiV1.Group("")
 	keyViewerProtected.Use(authHandler.apiKeyViewerMiddleware())
 	registerKeyOverviewRoute(keyViewerProtected, usageProvider, cpaAPIKeyProvider, authHandler)
 
 	if staticFS != nil {
-		registerStaticRoutes(router, appGroup, staticFS, basePath)
+		registerStaticRoutes(router, appGroup, staticFS, basePath, tutorialPDFConfig)
 	}
 
 	return router
 }
 
-func registerStaticRoutes(router *gin.Engine, appGroup *gin.RouterGroup, staticFS fs.FS, basePath string) {
+func registerStaticRoutes(router *gin.Engine, appGroup *gin.RouterGroup, staticFS fs.FS, basePath string, tutorialPDFConfig TutorialPDFConfig) {
 	if staticFS == nil {
 		return
 	}
@@ -173,7 +191,7 @@ func registerStaticRoutes(router *gin.Engine, appGroup *gin.RouterGroup, staticF
 		_ = indexFile.Close()
 		httpFS := http.FS(staticFS)
 		serveIndex := func(c *gin.Context) {
-			indexHTML, err := renderIndexHTML(staticFS, basePath)
+			indexHTML, err := renderIndexHTML(staticFS, basePath, tutorialPDFConfig)
 			if err != nil {
 				c.Status(http.StatusNotFound)
 				return
@@ -230,7 +248,7 @@ func setStaticAssetCacheHeaders(c *gin.Context) {
 	c.Header("Cache-Control", "public, max-age=31536000, immutable")
 }
 
-func renderIndexHTML(staticFS fs.FS, basePath string) ([]byte, error) {
+func renderIndexHTML(staticFS fs.FS, basePath string, tutorialPDFConfig TutorialPDFConfig) ([]byte, error) {
 	indexFile, err := staticFS.Open("index.html")
 	if err != nil {
 		return nil, err
@@ -241,11 +259,59 @@ func renderIndexHTML(staticFS fs.FS, basePath string) ([]byte, error) {
 		return nil, err
 	}
 
-	return bytes.ReplaceAll(
+	indexHTML = bytes.ReplaceAll(
 		indexHTML,
 		[]byte(strconv.Quote(appBasePathPlaceholder)),
 		[]byte(strconv.Quote(basePath)),
-	), nil
+	)
+	indexHTML = bytes.ReplaceAll(
+		indexHTML,
+		[]byte(strconv.Quote(tutorialPDFURLPlaceholder)),
+		[]byte(strconv.Quote(tutorialPDFURL(basePath, tutorialPDFConfig))),
+	)
+	return indexHTML, nil
+}
+
+func registerTutorialPDFRoute(router gin.IRoutes, config TutorialPDFConfig) {
+	router.GET("/tutorial.pdf", func(c *gin.Context) {
+		pdfPath := strings.TrimSpace(config.Path)
+		if pdfPath == "" {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		info, err := os.Stat(pdfPath)
+		if err != nil || info.IsDir() {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		setPDFCacheHeaders(c)
+		c.Header("Content-Type", "application/pdf")
+		c.Header("Content-Disposition", mime.FormatMediaType("inline", map[string]string{
+			"filename": filepath.Base(pdfPath),
+		}))
+		c.File(pdfPath)
+	})
+}
+
+func setPDFCacheHeaders(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+}
+
+func tutorialPDFURL(basePath string, config TutorialPDFConfig) string {
+	pdfPath := strings.TrimSpace(config.Path)
+	if pdfPath == "" {
+		return ""
+	}
+	version := ""
+	if info, err := os.Stat(pdfPath); err == nil && !info.IsDir() {
+		version = "?v=" + strconv.FormatInt(info.ModTime().UnixNano(), 10)
+	}
+	if basePath == "" {
+		return tutorialPDFRoutePath + version
+	}
+	return basePath + tutorialPDFRoutePath + version
 }
 
 func cleanURLPath(requestPath string) string {
