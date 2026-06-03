@@ -88,7 +88,7 @@ func NewWithConfig(cfg config.Config) (*App, error) {
 	usageIdentityService := service.NewUsageIdentityService(db)
 	cpaAPIKeyService := service.NewCPAAPIKeyService(db)
 	pricingService := service.NewPricingService(db)
-	availableModelsService := service.NewAvailableModelsService(cfg.BaseURL, cfg.Key)
+	availableModelsService := service.NewAvailableModelsService(cfg.AvailableModelsBaseURL, cfg.AvailableModelsAPIKey)
 	sessionManager := auth.NewSessionManager(cfg.AuthSessionTTL)
 	authConfig := api.AuthConfig{
 		Enabled:       cfg.AuthEnabled,

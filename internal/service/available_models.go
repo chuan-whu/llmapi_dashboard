@@ -69,11 +69,11 @@ func (s *availableModelsService) FetchAvailableModels(ctx context.Context) ([]st
 func normalizeModelsEndpoint(value string) (string, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return "", fmt.Errorf("BASE_URL is required")
+		return "", fmt.Errorf("AVAILABLE_MODELS_BASE_URL is required")
 	}
 	parsed, err := url.Parse(trimmed)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return "", fmt.Errorf("BASE_URL must be an absolute URL")
+		return "", fmt.Errorf("AVAILABLE_MODELS_BASE_URL must be an absolute URL")
 	}
 	path := strings.TrimRight(parsed.Path, "/")
 	switch {
@@ -127,4 +127,3 @@ func normalizeModelNames(values []string) []string {
 	sort.Strings(models)
 	return models
 }
-

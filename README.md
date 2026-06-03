@@ -158,9 +158,12 @@ Only the following application settings are used:
 | `LOGIN_PASSWORD` | Yes when auth is enabled | - | Admin login password |
 | `AUTH_SESSION_TTL` | No | `168h` | Login session lifetime |
 | `TUTORIAL_PDF_PATH` | No | empty | Local PDF path for the top-bar usage guide link; served inline in the browser |
+| `AVAILABLE_MODELS_BASE_URL` | No | empty | OpenAI-compatible base URL used only to load the available model list |
+| `AVAILABLE_MODELS_API_KEY` | No | empty | API key used only to load the available model list |
 
 `APP_BASE_PATH` must be empty or start with `/`; for example `/keeper`. `/keeper/` is normalized to `/keeper`.
 Relative `TUTORIAL_PDF_PATH` values are resolved from the `.env` file directory.
+`AVAILABLE_MODELS_BASE_URL` may be an origin, `/v1`, or `/v1/models` URL; leave either available-models variable empty to show an empty model list.
 
 ## Nginx Reverse Proxy
 
