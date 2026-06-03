@@ -1,4 +1,4 @@
-import { type AnalysisResponse, type AuthSessionResponse, type AvailableModelsResponse, type CpaApiKeyOptionsResponse, type CpaApiKeySettingsItem, type CpaApiKeysResponse, type KeyOverviewTimeRange, type PricingEntry, type PricingResponse, type StatusResponse, type UpdateCheckResponse, type UsageEventModelFilterOptionsResponse, type UsageEventSourceFilterOptionsResponse, type UsedModelsResponse, type UsageIdentitiesPageResponse, type UsageIdentitiesResponse, type UsageEventsResponse, type UsageIdentityAuthType, type UsageOverviewResponse, type UsageQuotaCacheResponse, type UsageQuotaRefreshResponse, type UsageQuotaRefreshTaskResponse } from './types'
+import { type AnalysisResponse, type AuthSessionResponse, type AvailableModelsResponse, type CpaApiKeyOptionsResponse, type CpaApiKeySettingsItem, type CpaApiKeysResponse, type KeyOverviewTimeRange, type ModelInfoQueryResponse, type PricingEntry, type PricingResponse, type StatusResponse, type UpdateCheckResponse, type UsageEventModelFilterOptionsResponse, type UsageEventSourceFilterOptionsResponse, type UsedModelsResponse, type UsageIdentitiesPageResponse, type UsageIdentitiesResponse, type UsageEventsResponse, type UsageIdentityAuthType, type UsageOverviewResponse, type UsageQuotaCacheResponse, type UsageQuotaRefreshResponse, type UsageQuotaRefreshTaskResponse } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -357,6 +357,22 @@ export async function fetchAvailableModels(signal?: AbortSignal): Promise<Availa
   const response = await apiFetch(apiPath('/models/available'), { signal, cache: 'no-store' })
   if (!response.ok) {
     await parseApiError(response, `Failed to load available models: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function queryModelInfoByAPIKey(apiKey: string, signal?: AbortSignal): Promise<ModelInfoQueryResponse> {
+  const response = await apiFetch(apiPath('/models/query'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ apiKey: apiKey.trim() }),
+    signal,
+    cache: 'no-store',
+  })
+  if (!response.ok) {
+    await parseApiError(response, `Failed to query model info: ${response.status}`)
   }
   return response.json()
 }

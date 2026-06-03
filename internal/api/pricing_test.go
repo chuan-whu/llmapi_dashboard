@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"cpa-usage-keeper/internal/entities"
+	"cpa-usage-keeper/internal/service"
 	servicedto "cpa-usage-keeper/internal/service/dto"
 )
 
@@ -184,6 +185,25 @@ func TestReadOnlyPricingRoutesExposeOnlyGetEndpoints(t *testing.T) {
 	}
 }
 
+func TestReadOnlyModelQueryRouteUsesOhMyGPTProvider(t *testing.T) {
+	provider := &ohMyGPTQueryStub{
+		response: serviceOhMyGPTResponse("张三"),
+	}
+	router := NewReadOnlyRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", provider)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/models/query", strings.NewReader(`{"apiKey":" sk-test "}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK || !contains(resp.Body.String(), `"remark":"张三"`) {
+		t.Fatalf("unexpected model query response: %d %s", resp.Code, resp.Body.String())
+	}
+	if provider.apiKey != "sk-test" {
+		t.Fatalf("expected trimmed API key to be passed through, got %q", provider.apiKey)
+	}
+}
+
 type staticAvailableModelsFetcher struct {
 	models []string
 	err    error
@@ -191,4 +211,34 @@ type staticAvailableModelsFetcher struct {
 
 func (s staticAvailableModelsFetcher) FetchAvailableModels(context.Context) ([]string, error) {
 	return s.models, s.err
+}
+
+type ohMyGPTQueryStub struct {
+	apiKey   string
+	response service.OhMyGPTQueryResponse
+	err      error
+}
+
+func (s *ohMyGPTQueryStub) QueryAPIKey(_ context.Context, apiKey string) (service.OhMyGPTQueryResponse, error) {
+	s.apiKey = apiKey
+	return s.response, s.err
+}
+
+func serviceOhMyGPTResponse(remark string) service.OhMyGPTQueryResponse {
+	return service.OhMyGPTQueryResponse{
+		StatusCode: 200,
+		Message:    "ok",
+		Data: []service.OhMyGPTAPIKeyToken{{
+			Key:         "sk-*************************************************6dc",
+			Remark:      remark,
+			CreatedAt:   "2025-07-30T07:31:10.000Z",
+			UsedAt:      nil,
+			ExpiredAt:   "2035-07-28T07:26:00.000Z",
+			UsedTimes:   "1",
+			UsedFee:     "90.00",
+			MaxFee:      "25000.00",
+			Permissions: []string{"gpt-5"},
+			IsDisabled:  false,
+		}},
+	}
 }

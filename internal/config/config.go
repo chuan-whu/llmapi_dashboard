@@ -27,6 +27,8 @@ type Config struct {
 	SQLitePath             string
 	AvailableModelsBaseURL string
 	AvailableModelsAPIKey  string
+	OhMyGPTQueryURL        string
+	OhMyGPTQueryToken      string
 	TutorialPDFPath        string
 
 	// Deprecated fields kept so lower-level packages and tests that still use the
@@ -98,6 +100,8 @@ func Load(options LoadOptions) (*Config, error) {
 		SQLitePath:             strings.TrimSpace(os.Getenv("APP_DB_PATH")),
 		AvailableModelsBaseURL: strings.TrimSpace(os.Getenv("AVAILABLE_MODELS_BASE_URL")),
 		AvailableModelsAPIKey:  strings.TrimSpace(os.Getenv("AVAILABLE_MODELS_API_KEY")),
+		OhMyGPTQueryURL:        strings.TrimSpace(os.Getenv("OHMYGPT_QUERY_URL")),
+		OhMyGPTQueryToken:      strings.TrimSpace(os.Getenv("OHMYGPT_QUERY_TOKEN")),
 		TutorialPDFPath:        strings.TrimSpace(os.Getenv("TUTORIAL_PDF_PATH")),
 		LogLevel:               "info",
 		LogFileEnabled:         false,

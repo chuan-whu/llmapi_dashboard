@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { appPath, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchCpaApiKeys, fetchKeyOverview, fetchUsageOverview, fetchUsageQuotaCache, fetchUpdateCheck, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, fetchUsageIdentities, fetchUsageIdentitiesPage, fetchUsageQuotaRefreshTask, loginWithCPAAPIKey, logout, markStatusActive, refreshUsageQuotas, tutorialPDFURL, updateCpaApiKeyAlias } from './api';
+import { appPath, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchCpaApiKeys, fetchKeyOverview, fetchUsageOverview, fetchUsageQuotaCache, fetchUpdateCheck, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, fetchUsageIdentities, fetchUsageIdentitiesPage, fetchUsageQuotaRefreshTask, loginWithCPAAPIKey, logout, markStatusActive, queryModelInfoByAPIKey, refreshUsageQuotas, tutorialPDFURL, updateCpaApiKeyAlias } from './api';
 
 describe('fetchUsageEvents', () => {
   afterEach(() => {
@@ -484,5 +484,25 @@ describe('fetchUsageEvents', () => {
     expect(response.models).toEqual(['gpt-5', 'gpt-5-mini']);
     expect(parsed.pathname).toBe('/api/v1/models/available');
     expect(init).toMatchObject({ credentials: 'include', signal, cache: 'no-store' });
+  });
+
+  it('posts Oh My GPT API key quota queries to the model query endpoint', async () => {
+    vi.stubGlobal('window', { __APP_BASE_PATH__: undefined });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ statusCode: 200, message: 'ok', data: [] }),
+    } as Response);
+    const signal = new AbortController().signal;
+
+    const response = await queryModelInfoByAPIKey(' sk-test ', signal);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const parsed = new URL(String(url), 'http://localhost');
+
+    expect(response).toEqual({ statusCode: 200, message: 'ok', data: [] });
+    expect(parsed.pathname).toBe('/api/v1/models/query');
+    expect(init).toMatchObject({ credentials: 'include', method: 'POST', signal, cache: 'no-store' });
+    expect(init?.headers).toEqual({ 'Content-Type': 'application/json' });
+    expect(init?.body).toBe(JSON.stringify({ apiKey: 'sk-test' }));
   });
 });

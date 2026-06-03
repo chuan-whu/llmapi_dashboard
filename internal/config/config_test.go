@@ -10,7 +10,7 @@ import (
 
 var configEnvKeys = []string{
 	"APP_DB_PATH", "APP_PORT", "APP_BASE_PATH", "TZ",
-	"AVAILABLE_MODELS_BASE_URL", "AVAILABLE_MODELS_API_KEY", "CPA_BASE_URL", "CPA_MANAGEMENT_KEY", "AUTH_ENABLED", "LOGIN_PASSWORD", "AUTH_SESSION_TTL",
+	"AVAILABLE_MODELS_BASE_URL", "AVAILABLE_MODELS_API_KEY", "OHMYGPT_QUERY_URL", "OHMYGPT_QUERY_TOKEN", "CPA_BASE_URL", "CPA_MANAGEMENT_KEY", "AUTH_ENABLED", "LOGIN_PASSWORD", "AUTH_SESSION_TTL",
 	"WORK_DIR", "LOG_FILE_ENABLED", "BACKUP_ENABLED", "REDIS_QUEUE_ADDR", "TUTORIAL_PDF_PATH",
 }
 
@@ -163,6 +163,20 @@ func TestLoadReadsAvailableModelsEnvVars(t *testing.T) {
 	}
 	if cfg.AvailableModelsBaseURL != "https://api.openai.com/v1" || cfg.AvailableModelsAPIKey != "sk-test-key" {
 		t.Fatalf("expected available model env vars to be applied, got %+v", cfg)
+	}
+}
+
+func TestLoadReadsOhMyGPTQueryEnvVars(t *testing.T) {
+	t.Setenv("APP_DB_PATH", filepath.Join(t.TempDir(), "app.db"))
+	t.Setenv("OHMYGPT_QUERY_URL", " https://example.com/api/v1/user/admin/get-api-tokens ")
+	t.Setenv("OHMYGPT_QUERY_TOKEN", " admin-token ")
+
+	cfg, err := LoadFromEnv()
+	if err != nil {
+		t.Fatalf("LoadFromEnv returned error: %v", err)
+	}
+	if cfg.OhMyGPTQueryURL != "https://example.com/api/v1/user/admin/get-api-tokens" || cfg.OhMyGPTQueryToken != "admin-token" {
+		t.Fatalf("expected Oh My GPT query env vars to be applied, got %+v", cfg)
 	}
 }
 

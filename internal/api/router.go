@@ -92,6 +92,7 @@ func NewReadOnlyRouter(
 	protected.Use(authHandler.adminMiddleware())
 	var pricingProvider service.PricingProvider
 	var availableModelsProvider service.AvailableModelsProvider
+	var ohMyGPTQueryProvider service.OhMyGPTQueryProvider
 	var tutorialPDFConfig TutorialPDFConfig
 	for _, provider := range readOnlyProviders {
 		if typed, ok := provider.(service.PricingProvider); ok {
@@ -99,6 +100,9 @@ func NewReadOnlyRouter(
 		}
 		if typed, ok := provider.(service.AvailableModelsProvider); ok {
 			availableModelsProvider = typed
+		}
+		if typed, ok := provider.(service.OhMyGPTQueryProvider); ok {
+			ohMyGPTQueryProvider = typed
 		}
 		if typed, ok := provider.(TutorialPDFConfig); ok {
 			tutorialPDFConfig = typed
@@ -113,6 +117,7 @@ func NewReadOnlyRouter(
 	registerCPAAPIKeyOptionRoutes(protected, cpaAPIKeyProvider)
 	registerReadOnlyPricingRoutes(protected, pricingProvider)
 	registerAvailableModelsRoutes(protected, availableModelsProvider)
+	registerOhMyGPTQueryRoutes(protected, ohMyGPTQueryProvider)
 	registerStaticRoutes(router, appGroup, staticFS, basePath, tutorialPDFConfig)
 	return router
 }

@@ -14,7 +14,7 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { ApiError, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchPricing, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout, tutorialPDFURL } from '@/lib/api';
+import { ApiError, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchPricing, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout, queryModelInfoByAPIKey, tutorialPDFURL } from '@/lib/api';
 import type { AnalysisResponse, CpaApiKeyOption, PricingEntry, UsageEvent, UsageSourceFilterOption } from '@/lib/types';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
@@ -1231,6 +1231,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
                 availableModels={availableModels}
                 pricing={modelPricing}
                 loading={modelInfoLoading}
+                onApiKeyQuery={queryModelInfoByAPIKey}
               />
             )}
           </div>

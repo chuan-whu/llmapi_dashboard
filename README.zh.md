@@ -160,10 +160,14 @@ sudo systemctl restart cpa-usage-keeper
 | `TUTORIAL_PDF_PATH` | 否 | 空 | 顶部使用教程链接对应的本地 PDF 路径；浏览器内联阅读 |
 | `AVAILABLE_MODELS_BASE_URL` | 否 | 空 | 仅用于加载可用模型列表的 OpenAI 兼容接口地址 |
 | `AVAILABLE_MODELS_API_KEY` | 否 | 空 | 仅用于加载可用模型列表的 API key |
+| `OHMYGPT_QUERY_URL` | 否 | 空 | “模型与查询”页使用的 Oh My GPT 额度查询接口 |
+| `OHMYGPT_QUERY_TOKEN` | 否 | 空 | Oh My GPT 额度查询接口使用的 Bearer token |
 
 `APP_BASE_PATH` 必须为空或以 `/` 开头；例如 `/keeper`，`/keeper/` 会规范为 `/keeper`。
 相对形式的 `TUTORIAL_PDF_PATH` 会按 `.env` 所在目录解析。
 `AVAILABLE_MODELS_BASE_URL` 可以是接口域名、`/v1` 或 `/v1/models` 地址；任一可用模型变量留空时，可用模型列表显示为空。
+
+`OHMYGPT_QUERY_URL` 或 `OHMYGPT_QUERY_TOKEN` 任一留空时会禁用 Oh My GPT 额度查询。浏览器只会把待查询 API Key 发给本应用，配置的 Bearer token 只在服务端使用。
 
 ## Nginx 反代
 

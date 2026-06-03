@@ -368,6 +368,27 @@ export interface AvailableModelsResponse {
   models: string[]
 }
 
+export interface OhMyGPTAPIKeyToken {
+  key?: string
+  remark?: string
+  created_at?: string
+  used_at?: string | null
+  expired_at?: string
+  used_times?: string | number
+  used_fee?: string | number
+  max_fee?: string | number
+  permissions?: string[]
+  is_disabled?: boolean
+  [key: string]: unknown
+}
+
+export interface ModelInfoQueryResponse {
+  statusCode?: number
+  message?: string
+  data?: OhMyGPTAPIKeyToken[]
+  [key: string]: unknown
+}
+
 export interface PricingResponse {
   pricing: PricingEntry[]
 }

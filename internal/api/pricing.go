@@ -32,6 +32,10 @@ type updatePricingRequest struct {
 	CachePricePer1M      float64 `json:"cache_price_per_1m"`
 }
 
+type modelInfoQueryRequest struct {
+	APIKey string `json:"apiKey"`
+}
+
 func registerPricingRoutes(router gin.IRoutes, pricingProvider service.PricingProvider) {
 	router.GET("/models/used", func(c *gin.Context) {
 		if pricingProvider == nil {
@@ -120,6 +124,35 @@ func registerAvailableModelsRoutes(router gin.IRoutes, provider service.Availabl
 			return
 		}
 		c.JSON(http.StatusOK, usedModelsResponse{Models: models})
+	})
+}
+
+func registerOhMyGPTQueryRoutes(router gin.IRoutes, provider service.OhMyGPTQueryProvider) {
+	router.POST("/models/query", func(c *gin.Context) {
+		if provider == nil {
+			c.JSON(http.StatusNotImplemented, gin.H{"error": "Oh My GPT query provider is not configured"})
+			return
+		}
+		var request modelInfoQueryRequest
+		if err := c.ShouldBindJSON(&request); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		apiKey := strings.TrimSpace(request.APIKey)
+		if apiKey == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "apiKey is required"})
+			return
+		}
+		result, err := provider.QueryAPIKey(c.Request.Context(), apiKey)
+		if err != nil {
+			if strings.Contains(err.Error(), "required") {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			writeInternalError(c, "query Oh My GPT quota failed", err)
+			return
+		}
+		c.JSON(http.StatusOK, result)
 	})
 }
 

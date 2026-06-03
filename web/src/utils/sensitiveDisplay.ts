@@ -19,6 +19,10 @@ export function maskApiKey(value: string): string {
   return `${prefix}${'*'.repeat(starCount)}${suffix}`;
 }
 
+export function maskSensitiveText(value: string): string {
+  return value.replace(RAW_API_KEY_PATTERN, (match) => maskApiKey(match) || match);
+}
+
 export function safeApiKeyDisplayLabel(value: unknown, fallback = '-'): string {
   const trimmed = normalizeDisplayText(value);
   if (!trimmed) {

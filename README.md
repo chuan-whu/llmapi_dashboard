@@ -160,10 +160,14 @@ Only the following application settings are used:
 | `TUTORIAL_PDF_PATH` | No | empty | Local PDF path for the top-bar usage guide link; served inline in the browser |
 | `AVAILABLE_MODELS_BASE_URL` | No | empty | OpenAI-compatible base URL used only to load the available model list |
 | `AVAILABLE_MODELS_API_KEY` | No | empty | API key used only to load the available model list |
+| `OHMYGPT_QUERY_URL` | No | empty | Oh My GPT quota query endpoint used by the Model & Query page |
+| `OHMYGPT_QUERY_TOKEN` | No | empty | Bearer token used by the Oh My GPT quota query endpoint |
 
 `APP_BASE_PATH` must be empty or start with `/`; for example `/keeper`. `/keeper/` is normalized to `/keeper`.
 Relative `TUTORIAL_PDF_PATH` values are resolved from the `.env` file directory.
 `AVAILABLE_MODELS_BASE_URL` may be an origin, `/v1`, or `/v1/models` URL; leave either available-models variable empty to show an empty model list.
+
+Leave either `OHMYGPT_QUERY_URL` or `OHMYGPT_QUERY_TOKEN` empty to disable Oh My GPT quota lookup. The browser only posts the API key to this app; the configured bearer token is used server-side.
 
 ## Nginx Reverse Proxy
 

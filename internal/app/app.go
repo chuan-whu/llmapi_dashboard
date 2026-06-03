@@ -89,6 +89,7 @@ func NewWithConfig(cfg config.Config) (*App, error) {
 	cpaAPIKeyService := service.NewCPAAPIKeyService(db)
 	pricingService := service.NewPricingService(db)
 	availableModelsService := service.NewAvailableModelsService(cfg.AvailableModelsBaseURL, cfg.AvailableModelsAPIKey)
+	ohMyGPTQueryService := service.NewOhMyGPTQueryService(cfg.OhMyGPTQueryURL, cfg.OhMyGPTQueryToken)
 	sessionManager := auth.NewSessionManager(cfg.AuthSessionTTL)
 	authConfig := api.AuthConfig{
 		Enabled:       cfg.AuthEnabled,
@@ -113,6 +114,7 @@ func NewWithConfig(cfg config.Config) (*App, error) {
 			api.TutorialPDFConfig{Path: cfg.TutorialPDFPath},
 			pricingService,
 			availableModelsService,
+			ohMyGPTQueryService,
 		),
 	}, nil
 }

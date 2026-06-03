@@ -2178,6 +2178,266 @@
   min-width: 0;
 }
 
+.modelInfoQueryCard {
+  @include desktop {
+    grid-column: 1 / -1;
+  }
+}
+
+.modelInfoQueryForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  min-width: 0;
+
+  @include mobile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.modelInfoQueryField {
+  min-width: 0;
+
+  :global(.form-group) {
+    margin: 0;
+  }
+
+  :global(.input) {
+    height: 40px;
+    box-sizing: border-box;
+    border-radius: 8px;
+  }
+}
+
+.modelInfoQueryInput {
+  width: 100%;
+}
+
+.modelInfoQueryButton {
+  min-height: 40px;
+  white-space: nowrap;
+
+  @include mobile {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+.modelInfoQueryError {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger-color) 55%, var(--border-color));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger-color) 10%, var(--bg-primary));
+  color: var(--danger-color);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.modelInfoQueryResult {
+  margin: 12px 0 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-secondary) 74%, transparent);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ohMyGPTResultPanel {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ohMyGPTResultSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-secondary) 65%, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ohMyGPTQuotaList {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ohMyGPTQuotaCard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-primary) 88%, var(--bg-secondary));
+}
+
+.ohMyGPTQuotaHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+
+  > div {
+    min-width: 0;
+  }
+}
+
+.ohMyGPTQuotaName {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.ohMyGPTQuotaKey {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.ohMyGPTStatusBadge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--success-color) 45%, var(--border-color));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--success-color) 12%, transparent);
+  color: var(--success-color);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ohMyGPTStatusDisabled {
+  border-color: color-mix(in srgb, var(--danger-color) 48%, var(--border-color));
+  background: color-mix(in srgb, var(--danger-color) 11%, transparent);
+  color: var(--danger-color);
+}
+
+.ohMyGPTQuotaMetrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+
+  @include tablet {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include mobile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ohMyGPTMetric,
+.ohMyGPTMetricStrong {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-secondary) 58%, transparent);
+
+  span {
+    display: block;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  strong {
+    display: block;
+    margin-top: 5px;
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 850;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+}
+
+.ohMyGPTMetricStrong {
+  border-color: color-mix(in srgb, var(--primary-color) 34%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color) 9%, var(--bg-secondary));
+
+  strong {
+    font-size: 18px;
+  }
+}
+
+.ohMyGPTQuotaDetails {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px 12px;
+
+  @include tablet {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include mobile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ohMyGPTField {
+  min-width: 0;
+
+  span {
+    display: block;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  strong {
+    display: block;
+    margin-top: 3px;
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+}
+
+.ohMyGPTPermissionsBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.ohMyGPTPermissionsTitle {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .modelInfoList {
   display: flex;
   flex-wrap: wrap;
