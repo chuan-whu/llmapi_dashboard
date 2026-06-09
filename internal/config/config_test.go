@@ -10,7 +10,7 @@ import (
 
 var configEnvKeys = []string{
 	"APP_DB_PATH", "APP_PORT", "APP_BASE_PATH", "TZ",
-	"AVAILABLE_MODELS_BASE_URL", "AVAILABLE_MODELS_API_KEY", "OHMYGPT_QUERY_URL", "OHMYGPT_QUERY_TOKEN", "CPA_BASE_URL", "CPA_MANAGEMENT_KEY", "AUTH_ENABLED", "LOGIN_PASSWORD", "AUTH_SESSION_TTL",
+	"AVAILABLE_MODELS_BASE_URL", "AVAILABLE_MODELS_API_KEY", "OHMYGPT_QUERY_URL", "OHMYGPT_QUERY_TOKEN", "DAILY_QUOTA_QUERY_COMMAND", "DAILY_QUOTA_CACHE_TTL", "CPA_BASE_URL", "CPA_MANAGEMENT_KEY", "AUTH_ENABLED", "LOGIN_PASSWORD", "AUTH_SESSION_TTL",
 	"WORK_DIR", "LOG_FILE_ENABLED", "BACKUP_ENABLED", "REDIS_QUEUE_ADDR", "TUTORIAL_PDF_PATH",
 }
 
@@ -177,6 +177,80 @@ func TestLoadReadsOhMyGPTQueryEnvVars(t *testing.T) {
 	}
 	if cfg.OhMyGPTQueryURL != "https://example.com/api/v1/user/admin/get-api-tokens" || cfg.OhMyGPTQueryToken != "admin-token" {
 		t.Fatalf("expected Oh My GPT query env vars to be applied, got %+v", cfg)
+	}
+}
+
+func TestLoadReadsDailyQuotaQueryCommandFromEnv(t *testing.T) {
+	withIsolatedEnvFiles(t)
+	t.Setenv("APP_DB_PATH", filepath.Join(t.TempDir(), "app.db"))
+	t.Setenv("DAILY_QUOTA_QUERY_COMMAND", " uv run query_amount.py ")
+
+	cfg, err := LoadFromEnv()
+	if err != nil {
+		t.Fatalf("LoadFromEnv returned error: %v", err)
+	}
+	if cfg.DailyQuotaQueryCommand != "uv run query_amount.py" || cfg.DailyQuotaQueryWorkDir != "" {
+		t.Fatalf("expected daily quota query command from env without .env work dir, got %+v", cfg)
+	}
+}
+
+func TestLoadReadsDailyQuotaCacheTTLFromEnv(t *testing.T) {
+	withIsolatedEnvFiles(t)
+	t.Setenv("APP_DB_PATH", filepath.Join(t.TempDir(), "app.db"))
+	t.Setenv("DAILY_QUOTA_CACHE_TTL", "15m")
+
+	cfg, err := LoadFromEnv()
+	if err != nil {
+		t.Fatalf("LoadFromEnv returned error: %v", err)
+	}
+	if cfg.DailyQuotaCacheTTL != 15*time.Minute {
+		t.Fatalf("expected daily quota cache TTL 15m, got %s", cfg.DailyQuotaCacheTTL)
+	}
+}
+
+func TestLoadDefaultsDailyQuotaCacheTTLWhenUnsetOrInvalid(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		value string
+	}{
+		{name: "unset"},
+		{name: "invalid", value: "not-a-duration"},
+		{name: "zero", value: "0"},
+		{name: "negative", value: "-1m"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			withIsolatedEnvFiles(t)
+			t.Setenv("APP_DB_PATH", filepath.Join(t.TempDir(), "app.db"))
+			if testCase.value != "" {
+				t.Setenv("DAILY_QUOTA_CACHE_TTL", testCase.value)
+			}
+
+			cfg, err := LoadFromEnv()
+			if err != nil {
+				t.Fatalf("LoadFromEnv returned error: %v", err)
+			}
+			if cfg.DailyQuotaCacheTTL != 10*time.Minute {
+				t.Fatalf("expected default daily quota cache TTL 10m, got %s", cfg.DailyQuotaCacheTTL)
+			}
+		})
+	}
+}
+
+func TestLoadReadsDailyQuotaQueryCommandFromSpecifiedEnvFile(t *testing.T) {
+	withIsolatedEnvFiles(t)
+	envDir := t.TempDir()
+	envPath := filepath.Join(envDir, "custom.env")
+	body := "APP_DB_PATH=./snapshots/app.db\nDAILY_QUOTA_QUERY_COMMAND=uv run query_amount.py\n"
+	if err := os.WriteFile(envPath, []byte(body), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	cfg, err := Load(LoadOptions{EnvFile: envPath})
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.DailyQuotaQueryCommand != "uv run query_amount.py" || cfg.DailyQuotaQueryWorkDir != envDir {
+		t.Fatalf("expected daily quota command work dir to use .env dir, got %+v", cfg)
 	}
 }
 

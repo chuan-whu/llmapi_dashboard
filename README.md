@@ -162,12 +162,16 @@ Only the following application settings are used:
 | `AVAILABLE_MODELS_API_KEY` | No | empty | API key used only to load the available model list |
 | `OHMYGPT_QUERY_URL` | No | empty | Oh My GPT quota query endpoint used by the Model & Query page |
 | `OHMYGPT_QUERY_TOKEN` | No | empty | Bearer token used by the Oh My GPT quota query endpoint |
+| `DAILY_QUOTA_QUERY_COMMAND` | No | empty | Command used for the top-bar daily remaining quota display; stdout must be a JSON object with a top-level `remaining` field |
+| `DAILY_QUOTA_CACHE_TTL` | No | `10m` | In-memory cache duration for the daily quota command; invalid, zero, or negative values fall back to `10m` |
 
 `APP_BASE_PATH` must be empty or start with `/`; for example `/keeper`. `/keeper/` is normalized to `/keeper`.
 Relative `TUTORIAL_PDF_PATH` values are resolved from the `.env` file directory.
 `AVAILABLE_MODELS_BASE_URL` may be an origin, `/v1`, or `/v1/models` URL; leave either available-models variable empty to show an empty model list.
 
 Leave either `OHMYGPT_QUERY_URL` or `OHMYGPT_QUERY_TOKEN` empty to disable Oh My GPT quota lookup. The browser only posts the API key to this app; the configured bearer token is used server-side.
+
+`DAILY_QUOTA_QUERY_COMMAND` runs server-side with shell semantics. Relative commands run from the `.env` file directory when a `.env` file is loaded. The result is rounded to two decimals and cached in memory for `DAILY_QUOTA_CACHE_TTL`; command errors, invalid JSON, non-numeric `remaining`, or missing `remaining` show `Query failed` in the header.
 
 ## Nginx Reverse Proxy
 

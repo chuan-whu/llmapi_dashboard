@@ -38,6 +38,7 @@ lerna-debug.log*
 
 # local overrides
 *.local
+query_amount.py
 
 # editor and OS files
 .DS_Store

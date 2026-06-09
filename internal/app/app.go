@@ -90,6 +90,7 @@ func NewWithConfig(cfg config.Config) (*App, error) {
 	pricingService := service.NewPricingService(db)
 	availableModelsService := service.NewAvailableModelsService(cfg.AvailableModelsBaseURL, cfg.AvailableModelsAPIKey)
 	ohMyGPTQueryService := service.NewOhMyGPTQueryService(cfg.OhMyGPTQueryURL, cfg.OhMyGPTQueryToken)
+	dailyQuotaService := service.NewDailyQuotaQueryService(cfg.DailyQuotaQueryCommand, cfg.DailyQuotaQueryWorkDir, cfg.DailyQuotaCacheTTL)
 	sessionManager := auth.NewSessionManager(cfg.AuthSessionTTL)
 	authConfig := api.AuthConfig{
 		Enabled:       cfg.AuthEnabled,
@@ -115,6 +116,7 @@ func NewWithConfig(cfg config.Config) (*App, error) {
 			pricingService,
 			availableModelsService,
 			ohMyGPTQueryService,
+			dailyQuotaService,
 		),
 	}, nil
 }

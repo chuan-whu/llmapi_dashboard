@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { appPath, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchCpaApiKeys, fetchKeyOverview, fetchUsageOverview, fetchUsageQuotaCache, fetchUpdateCheck, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, fetchUsageIdentities, fetchUsageIdentitiesPage, fetchUsageQuotaRefreshTask, loginWithCPAAPIKey, logout, markStatusActive, queryModelInfoByAPIKey, refreshUsageQuotas, tutorialPDFURL, updateCpaApiKeyAlias } from './api';
+import { appPath, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchCpaApiKeys, fetchDailyQuota, fetchKeyOverview, fetchUsageOverview, fetchUsageQuotaCache, fetchUpdateCheck, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, fetchUsageIdentities, fetchUsageIdentitiesPage, fetchUsageQuotaRefreshTask, loginWithCPAAPIKey, logout, markStatusActive, queryModelInfoByAPIKey, refreshUsageQuotas, tutorialPDFURL, updateCpaApiKeyAlias } from './api';
 
 describe('fetchUsageEvents', () => {
   afterEach(() => {
@@ -23,6 +23,24 @@ describe('fetchUsageEvents', () => {
 
     vi.stubGlobal('window', { __TUTORIAL_PDF_URL__: '   ' });
     expect(tutorialPDFURL()).toBe('');
+  });
+
+  it('loads daily quota from the protected read-only endpoint', async () => {
+    vi.stubGlobal('window', { __APP_BASE_PATH__: undefined });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'ok', remaining: '135.745766' }),
+    } as Response);
+    const signal = new AbortController().signal;
+
+    const response = await fetchDailyQuota(signal);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const parsed = new URL(String(url), 'http://localhost');
+
+    expect(response).toEqual({ status: 'ok', remaining: '135.745766' });
+    expect(parsed.pathname).toBe('/api/v1/daily-quota');
+    expect(init).toMatchObject({ credentials: 'include', signal, cache: 'no-store' });
   });
 
   it('posts CPA API key logins to the dedicated auth endpoint', async () => {

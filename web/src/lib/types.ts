@@ -389,6 +389,11 @@ export interface ModelInfoQueryResponse {
   [key: string]: unknown
 }
 
+export interface DailyQuotaResponse {
+  status: 'ok' | 'failed'
+  remaining?: string
+}
+
 export interface PricingResponse {
   pricing: PricingEntry[]
 }

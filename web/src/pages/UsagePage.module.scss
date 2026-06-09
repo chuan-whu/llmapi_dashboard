@@ -78,12 +78,22 @@
 .topBarCenter {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   min-width: 0;
 
   @include mobile {
     order: 2;
   }
+}
+
+.headerInfoGroup {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
 }
 
 .tutorialLink {
@@ -120,6 +130,44 @@
   &:focus-visible {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
+  }
+}
+
+.dailyQuotaBox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-left: 4px;
+  min-height: 38px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #8a1538 62%, var(--border-color));
+  background: color-mix(in srgb, var(--bg-secondary) 84%, #8a1538 12%);
+  color: #8a1538;
+  box-shadow:
+    0 8px 18px rgba(138, 21, 56, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@include mobile {
+  .headerInfoGroup {
+    width: 100%;
+  }
+
+  .tutorialLink,
+  .dailyQuotaBox {
+    flex: 1 1 100%;
+  }
+
+  .dailyQuotaBox {
+    margin-left: 0;
   }
 }
 

@@ -1,4 +1,4 @@
-import { type AnalysisResponse, type AuthSessionResponse, type AvailableModelsResponse, type CpaApiKeyOptionsResponse, type CpaApiKeySettingsItem, type CpaApiKeysResponse, type KeyOverviewTimeRange, type ModelInfoQueryResponse, type PricingEntry, type PricingResponse, type StatusResponse, type UpdateCheckResponse, type UsageEventModelFilterOptionsResponse, type UsageEventSourceFilterOptionsResponse, type UsedModelsResponse, type UsageIdentitiesPageResponse, type UsageIdentitiesResponse, type UsageEventsResponse, type UsageIdentityAuthType, type UsageOverviewResponse, type UsageQuotaCacheResponse, type UsageQuotaRefreshResponse, type UsageQuotaRefreshTaskResponse } from './types'
+import { type AnalysisResponse, type AuthSessionResponse, type AvailableModelsResponse, type CpaApiKeyOptionsResponse, type CpaApiKeySettingsItem, type CpaApiKeysResponse, type DailyQuotaResponse, type KeyOverviewTimeRange, type ModelInfoQueryResponse, type PricingEntry, type PricingResponse, type StatusResponse, type UpdateCheckResponse, type UsageEventModelFilterOptionsResponse, type UsageEventSourceFilterOptionsResponse, type UsedModelsResponse, type UsageIdentitiesPageResponse, type UsageIdentitiesResponse, type UsageEventsResponse, type UsageIdentityAuthType, type UsageOverviewResponse, type UsageQuotaCacheResponse, type UsageQuotaRefreshResponse, type UsageQuotaRefreshTaskResponse } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -373,6 +373,14 @@ export async function queryModelInfoByAPIKey(apiKey: string, signal?: AbortSigna
   })
   if (!response.ok) {
     await parseApiError(response, `Failed to query model info: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function fetchDailyQuota(signal?: AbortSignal): Promise<DailyQuotaResponse> {
+  const response = await apiFetch(apiPath('/daily-quota'), { signal, cache: 'no-store' })
+  if (!response.ok) {
+    await parseApiError(response, `Failed to load daily quota: ${response.status}`)
   }
   return response.json()
 }

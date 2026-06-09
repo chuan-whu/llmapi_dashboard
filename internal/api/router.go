@@ -54,6 +54,7 @@ type OptionalProviders struct {
 	UsageIdentity   service.UsageIdentityProvider
 	Quota           QuotaProvider
 	CPAAPIKeys      service.CPAAPIKeyProvider
+	DailyQuota      service.DailyQuotaProvider
 	Status          StatusRouteConfig
 	TutorialPDFPath string
 }
@@ -93,6 +94,7 @@ func NewReadOnlyRouter(
 	var pricingProvider service.PricingProvider
 	var availableModelsProvider service.AvailableModelsProvider
 	var ohMyGPTQueryProvider service.OhMyGPTQueryProvider
+	var dailyQuotaProvider service.DailyQuotaProvider
 	var tutorialPDFConfig TutorialPDFConfig
 	for _, provider := range readOnlyProviders {
 		if typed, ok := provider.(service.PricingProvider); ok {
@@ -104,11 +106,15 @@ func NewReadOnlyRouter(
 		if typed, ok := provider.(service.OhMyGPTQueryProvider); ok {
 			ohMyGPTQueryProvider = typed
 		}
+		if typed, ok := provider.(service.DailyQuotaProvider); ok {
+			dailyQuotaProvider = typed
+		}
 		if typed, ok := provider.(TutorialPDFConfig); ok {
 			tutorialPDFConfig = typed
 		}
 	}
 	registerReadOnlyStatusRoute(protected)
+	registerDailyQuotaRoute(protected, dailyQuotaProvider)
 	registerTutorialPDFRoute(protected, tutorialPDFConfig)
 	registerUsageOverviewRoute(protected, usageProvider)
 	registerUsageAnalysisRoute(protected, usageProvider, cpaAPIKeyProvider)
@@ -153,12 +159,14 @@ func NewRouter(
 	var usageIdentityProvider service.UsageIdentityProvider
 	var quotaProvider QuotaProvider
 	var cpaAPIKeyProvider service.CPAAPIKeyProvider
+	var dailyQuotaProvider service.DailyQuotaProvider
 	var statusConfig StatusRouteConfig
 	var tutorialPDFConfig TutorialPDFConfig
 	if len(optionalProviders) > 0 {
 		usageIdentityProvider = optionalProviders[0].UsageIdentity
 		quotaProvider = optionalProviders[0].Quota
 		cpaAPIKeyProvider = optionalProviders[0].CPAAPIKeys
+		dailyQuotaProvider = optionalProviders[0].DailyQuota
 		statusConfig = optionalProviders[0].Status
 		tutorialPDFConfig = TutorialPDFConfig{Path: optionalProviders[0].TutorialPDFPath}
 	}
@@ -175,6 +183,7 @@ func NewRouter(
 	registerCPAAPIKeyRoutes(adminProtected, cpaAPIKeyProvider)
 	registerPricingRoutes(adminProtected, pricingProvider)
 	registerQuotaRoutes(adminProtected, quotaProvider)
+	registerDailyQuotaRoute(adminProtected, dailyQuotaProvider)
 	registerTutorialPDFRoute(adminProtected, tutorialPDFConfig)
 
 	keyViewerProtected := apiV1.Group("")

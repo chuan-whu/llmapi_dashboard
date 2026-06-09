@@ -16,9 +16,10 @@ import (
 const DefaultTimeZone = "Asia/Shanghai"
 
 var (
-	DefaultWorkDir    = filepath.Join(".", "data")
-	DefaultSQLitePath = filepath.Join(DefaultWorkDir, "app.db")
-	DefaultLogDir     = filepath.Join(DefaultWorkDir, "logs")
+	DefaultWorkDir            = filepath.Join(".", "data")
+	DefaultSQLitePath         = filepath.Join(DefaultWorkDir, "app.db")
+	DefaultLogDir             = filepath.Join(DefaultWorkDir, "logs")
+	DefaultDailyQuotaCacheTTL = 10 * time.Minute
 )
 
 type Config struct {
@@ -29,6 +30,9 @@ type Config struct {
 	AvailableModelsAPIKey  string
 	OhMyGPTQueryURL        string
 	OhMyGPTQueryToken      string
+	DailyQuotaQueryCommand string
+	DailyQuotaQueryWorkDir string
+	DailyQuotaCacheTTL     time.Duration
 	TutorialPDFPath        string
 
 	// Deprecated fields kept so lower-level packages and tests that still use the
@@ -102,6 +106,9 @@ func Load(options LoadOptions) (*Config, error) {
 		AvailableModelsAPIKey:  strings.TrimSpace(os.Getenv("AVAILABLE_MODELS_API_KEY")),
 		OhMyGPTQueryURL:        strings.TrimSpace(os.Getenv("OHMYGPT_QUERY_URL")),
 		OhMyGPTQueryToken:      strings.TrimSpace(os.Getenv("OHMYGPT_QUERY_TOKEN")),
+		DailyQuotaQueryCommand: strings.TrimSpace(os.Getenv("DAILY_QUOTA_QUERY_COMMAND")),
+		DailyQuotaQueryWorkDir: envBaseDir,
+		DailyQuotaCacheTTL:     getPositiveDurationOrDefault("DAILY_QUOTA_CACHE_TTL", DefaultDailyQuotaCacheTTL),
 		TutorialPDFPath:        strings.TrimSpace(os.Getenv("TUTORIAL_PDF_PATH")),
 		LogLevel:               "info",
 		LogFileEnabled:         false,
@@ -255,6 +262,18 @@ func getDuration(key string, fallback time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("%s must be a valid duration: %w", key, err)
 	}
 	return duration, nil
+}
+
+func getPositiveDurationOrDefault(key string, fallback time.Duration) time.Duration {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil || duration <= 0 {
+		return fallback
+	}
+	return duration
 }
 
 func getBool(key string, fallback bool) (bool, error) {

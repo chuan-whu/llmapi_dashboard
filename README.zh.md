@@ -162,12 +162,16 @@ sudo systemctl restart cpa-usage-keeper
 | `AVAILABLE_MODELS_API_KEY` | 否 | 空 | 仅用于加载可用模型列表的 API key |
 | `OHMYGPT_QUERY_URL` | 否 | 空 | “模型与查询”页使用的 Oh My GPT 额度查询接口 |
 | `OHMYGPT_QUERY_TOKEN` | 否 | 空 | Oh My GPT 额度查询接口使用的 Bearer token |
+| `DAILY_QUOTA_QUERY_COMMAND` | 否 | 空 | 顶部“今日剩余额度”显示使用的服务端命令；stdout 必须是包含顶层 `remaining` 字段的 JSON 对象 |
+| `DAILY_QUOTA_CACHE_TTL` | 否 | `10m` | 每日额度查询命令的内存缓存时间；非法、为 0 或负数时默认 `10m` |
 
 `APP_BASE_PATH` 必须为空或以 `/` 开头；例如 `/keeper`，`/keeper/` 会规范为 `/keeper`。
 相对形式的 `TUTORIAL_PDF_PATH` 会按 `.env` 所在目录解析。
 `AVAILABLE_MODELS_BASE_URL` 可以是接口域名、`/v1` 或 `/v1/models` 地址；任一可用模型变量留空时，可用模型列表显示为空。
 
 `OHMYGPT_QUERY_URL` 或 `OHMYGPT_QUERY_TOKEN` 任一留空时会禁用 Oh My GPT 额度查询。浏览器只会把待查询 API Key 发给本应用，配置的 Bearer token 只在服务端使用。
+
+`DAILY_QUOTA_QUERY_COMMAND` 会在服务端按 shell 语义执行。加载 `.env` 文件时，相对命令会以 `.env` 所在目录作为工作目录。结果会保留两位小数，并按 `DAILY_QUOTA_CACHE_TTL` 缓存在内存中；命令错误、JSON 非法、`remaining` 非数字或缺少 `remaining` 时，顶部显示“查询失败”。
 
 ## Nginx 反代
 

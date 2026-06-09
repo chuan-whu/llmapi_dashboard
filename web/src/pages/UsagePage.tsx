@@ -14,8 +14,8 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { ApiError, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchPricing, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout, queryModelInfoByAPIKey, tutorialPDFURL } from '@/lib/api';
-import type { AnalysisResponse, CpaApiKeyOption, PricingEntry, UsageEvent, UsageSourceFilterOption } from '@/lib/types';
+import { ApiError, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchDailyQuota, fetchPricing, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout, queryModelInfoByAPIKey, tutorialPDFURL } from '@/lib/api';
+import type { AnalysisResponse, CpaApiKeyOption, DailyQuotaResponse, PricingEntry, UsageEvent, UsageSourceFilterOption } from '@/lib/types';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { Select } from '@/components/ui/Select';
@@ -114,6 +114,12 @@ const REQUEST_EVENTS_PAGE_SIZES = [20, 50, 100, 500, 1000] as const;
 const REQUEST_EVENTS_DEFAULT_PAGE_SIZE = 100;
 const ALL_REQUEST_EVENTS_FILTER = '__all__';
 const OVERVIEW_AUTO_REFRESH_INTERVAL_MS = 10_000;
+export const DAILY_QUOTA_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+
+type DailyQuotaDisplay = {
+  status: 'loading' | 'ok' | 'failed';
+  remaining?: string;
+};
 
 export const getCredentialSectionVisibility = (tab: string) => ({
   enabled: tab === 'ai-provider',
@@ -130,6 +136,27 @@ export const isUsagePageVisible = (documentRef?: Pick<Document, 'visibilityState
 };
 export const getBackToCPALinkURL = () => '';
 export const getUpdateCheckToastDuration = (kind: 'success' | 'info' | 'error') => (kind === 'error' ? 6_000 : 4_000);
+
+export const normalizeDailyQuotaDisplay = (response: DailyQuotaResponse): DailyQuotaDisplay => {
+  const remaining = typeof response.remaining === 'string' ? response.remaining.trim() : '';
+  const normalizedRemaining = remaining.startsWith('$') ? remaining.slice(1).trim() : remaining;
+  const parsedRemaining = Number(normalizedRemaining);
+  if (response.status === 'ok' && normalizedRemaining && Number.isFinite(parsedRemaining)) {
+    return { status: 'ok', remaining: parsedRemaining.toFixed(2) };
+  }
+  return { status: 'failed' };
+};
+
+export const formatDailyQuotaDisplayText = (display: DailyQuotaDisplay, translate: Translate): string => {
+  const label = translate('usage_stats.daily_quota_label');
+  if (display.status === 'ok' && display.remaining) {
+    return `${label}：$${display.remaining}`;
+  }
+  if (display.status === 'loading') {
+    return `${label}：${translate('usage_stats.daily_quota_loading')}`;
+  }
+  return `${label}：${translate('usage_stats.daily_quota_failed')}`;
+};
 
 export const shouldAutoRefreshUsageTab = ({
   activeTab,
@@ -172,6 +199,7 @@ type RequestEventFilterOptionsState = {
 
 type RefreshPageDataOptions = {
   refreshActiveTab: () => Promise<void>;
+  refreshDailyQuota?: () => Promise<void>;
 };
 
 type OverviewAutoRefreshDocument = Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>;
@@ -183,8 +211,11 @@ type OverviewAutoRefreshOptions = {
   intervalMs?: number;
 };
 
-export const refreshPageData = async ({ refreshActiveTab }: RefreshPageDataOptions) => {
-  await refreshActiveTab();
+export const refreshPageData = async ({ refreshActiveTab, refreshDailyQuota }: RefreshPageDataOptions) => {
+  await Promise.all([
+    refreshActiveTab(),
+    refreshDailyQuota?.() ?? Promise.resolve(),
+  ]);
 };
 
 export const getOverviewDisplayLoading = ({ loading, hasUsage }: { loading: boolean; hasUsage: boolean }) => loading && !hasUsage;
@@ -544,6 +575,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const [modelInfoError, setModelInfoError] = useState('');
   const [manualRefreshLoading, setManualRefreshLoading] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [dailyQuotaDisplay, setDailyQuotaDisplay] = useState<DailyQuotaDisplay>({ status: 'loading' });
   const customStartInputRef = useRef<HTMLInputElement | null>(null);
   const customEndInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -771,6 +803,20 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
     }
   }, [onAuthRequired]);
 
+  const loadDailyQuota = useCallback(async () => {
+    const controller = new AbortController();
+    try {
+      const response = await fetchDailyQuota(controller.signal);
+      setDailyQuotaDisplay(normalizeDailyQuotaDisplay(response));
+    } catch (fetchError) {
+      if (fetchError instanceof ApiError && fetchError.status === 401) {
+        onAuthRequired?.();
+        return;
+      }
+      setDailyQuotaDisplay({ status: 'failed' });
+    }
+  }, [onAuthRequired]);
+
   const refreshActiveTab = useCallback(async () => {
     if (activeTab === 'overview') {
       await loadUsage();
@@ -786,6 +832,14 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   }, [activeTab, loadAnalysis, loadEventFilterOptions, loadEvents, loadModelInfo, loadModelPricing, loadUsage, refreshCredentials]);
 
   useHeaderRefresh(refreshActiveTab);
+
+  useEffect(() => {
+    void loadDailyQuota();
+    const timer = window.setInterval(() => {
+      void loadDailyQuota();
+    }, DAILY_QUOTA_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [loadDailyQuota]);
 
   useEffect(() => scheduleOverviewAutoRefresh({
     enabled: shouldAutoRefreshUsageTab({ activeTab, eventsPage }),
@@ -834,7 +888,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const handleManualRefresh = useCallback(async () => {
     setManualRefreshLoading(true);
     try {
-      await refreshPageData({ refreshActiveTab });
+      await refreshPageData({ refreshActiveTab, refreshDailyQuota: loadDailyQuota });
     } catch (refreshError) {
       if (refreshError instanceof ApiError) {
         if (refreshError.status === 401) {
@@ -846,7 +900,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
     } finally {
       setManualRefreshLoading(false);
     }
-  }, [onAuthRequired, refreshActiveTab]);
+  }, [loadDailyQuota, onAuthRequired, refreshActiveTab]);
 
   const handleLogout = useCallback(async () => {
     setLoggingOut(true);
@@ -890,6 +944,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const themeOptions = useMemo(() => THEME_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) })), [t]);
   const apiKeySelectOptions = useMemo(() => getApiKeySelectOptions(apiKeyOptions, t), [apiKeyOptions, t]);
   const tutorialURL = tutorialPDFURL();
+  const dailyQuotaText = formatDailyQuotaDisplayText(dailyQuotaDisplay, t);
   const lastSyncAt = lastRefreshedAt;
 
   const handleCustomDateInputActivate = (event: SyntheticEvent<HTMLInputElement>) => {
@@ -910,11 +965,16 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
             <BrandLink className={styles.eyebrow} />
           </div>
           <div className={styles.topBarCenter}>
-            {tutorialURL && (
-              <a className={styles.tutorialLink} href={tutorialURL} target="_blank" rel="noreferrer">
-                {t('usage_stats.tutorial_link')}
-              </a>
-            )}
+            <div className={styles.headerInfoGroup}>
+              {tutorialURL && (
+                <a className={styles.tutorialLink} href={tutorialURL} target="_blank" rel="noreferrer">
+                  {t('usage_stats.tutorial_link')}
+                </a>
+              )}
+              <div className={styles.dailyQuotaBox} role="status" aria-live="polite" title={dailyQuotaText}>
+                {dailyQuotaText}
+              </div>
+            </div>
           </div>
           <div className={styles.topBarActions}>
             <LanguageSwitcher className={styles.headerLanguageSwitcher} />
