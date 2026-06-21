@@ -133,7 +133,8 @@
   }
 }
 
-.dailyQuotaBox {
+.dailyQuotaBox,
+.payAsYouGoQuotaBox {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -143,17 +144,29 @@
   min-width: 0;
   padding: 0 14px;
   border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dailyQuotaBox {
   border: 1px solid color-mix(in srgb, #8a1538 62%, var(--border-color));
   background: color-mix(in srgb, var(--bg-secondary) 84%, #8a1538 12%);
   color: #8a1538;
   box-shadow:
     0 8px 18px rgba(138, 21, 56, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.payAsYouGoQuotaBox {
+  border: 1px solid color-mix(in srgb, #1d4ed8 62%, var(--border-color));
+  background: color-mix(in srgb, var(--bg-secondary) 82%, #1d4ed8 13%);
+  color: #1d4ed8;
+  box-shadow:
+    0 8px 18px rgba(29, 78, 216, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 @include mobile {
@@ -162,11 +175,13 @@
   }
 
   .tutorialLink,
-  .dailyQuotaBox {
+  .dailyQuotaBox,
+  .payAsYouGoQuotaBox {
     flex: 1 1 100%;
   }
 
-  .dailyQuotaBox {
+  .dailyQuotaBox,
+  .payAsYouGoQuotaBox {
     margin-left: 0;
   }
 }

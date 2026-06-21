@@ -22,9 +22,9 @@ func TestDailyQuotaQueryServiceCachesSuccessfulResult(t *testing.T) {
 			calls++
 			capturedRequest = request
 			if calls == 1 {
-				return `{"status":"partial","remaining":135.745766}`, nil
+				return `{"status":"ok","daily_refresh":{"status":"ok","remaining":135.745766},"pay_as_you_go":{"status":"ok","remaining":"$42.50"},"requests":[]}`, nil
 			}
-			return `{"status":"ok","remaining":"$42.50"}`, nil
+			return `{"status":"partial","daily_refresh":{"status":"failed"},"pay_as_you_go":{"status":"ok","remaining":7}}`, nil
 		},
 	})
 
@@ -35,13 +35,13 @@ func TestDailyQuotaQueryServiceCachesSuccessfulResult(t *testing.T) {
 	now = now.Add(2 * time.Nanosecond)
 	fourth := service.GetDailyQuota(context.Background())
 
-	if first.Status != "ok" || first.Remaining != "135.75" {
+	if first.Status != "ok" || first.DailyRefresh.Status != "ok" || first.DailyRefresh.Remaining != "135.75" || first.PayAsYouGo.Status != "ok" || first.PayAsYouGo.Remaining != "42.50" {
 		t.Fatalf("expected first response to expose numeric remaining with two decimals, got %+v", first)
 	}
 	if second != first || third != first {
 		t.Fatalf("expected cached response before TTL expiry, got first=%+v second=%+v third=%+v", first, second, third)
 	}
-	if fourth.Status != "ok" || fourth.Remaining != "42.50" {
+	if fourth.Status != "partial" || fourth.DailyRefresh.Status != "failed" || fourth.DailyRefresh.Remaining != "" || fourth.PayAsYouGo.Status != "ok" || fourth.PayAsYouGo.Remaining != "7.00" {
 		t.Fatalf("expected refreshed response after TTL expiry, got %+v", fourth)
 	}
 	if calls != 2 {
@@ -52,16 +52,42 @@ func TestDailyQuotaQueryServiceCachesSuccessfulResult(t *testing.T) {
 	}
 }
 
-func TestDailyQuotaQueryServiceFormatsRemainingWithTwoDecimals(t *testing.T) {
+func TestDailyQuotaQueryServiceFormatsBalancesWithTwoDecimals(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "json number", value: `135.745766`, want: "135.75"},
+		{name: "integer number", value: `42`, want: "42.00"},
+		{name: "numeric string", value: `"42.5"`, want: "42.50"},
+		{name: "dollar-prefixed string", value: `"$42.5"`, want: "42.50"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			service := NewDailyQuotaQueryServiceWithOptions(DailyQuotaQueryOptions{
+				Command: "uv run query_amount.py",
+				Runner: func(context.Context, DailyQuotaCommandRequest) (string, error) {
+					return `{"daily_refresh":{"status":"partial","remaining":` + testCase.value + `},"pay_as_you_go":{"status":"ok","remaining":` + testCase.value + `}}`, nil
+				},
+			})
+
+			got := service.GetDailyQuota(context.Background())
+
+			if got.Status != "partial" || got.DailyRefresh.Status != "partial" || got.DailyRefresh.Remaining != testCase.want || got.PayAsYouGo.Status != "ok" || got.PayAsYouGo.Remaining != testCase.want {
+				t.Fatalf("expected remaining %s, got %+v", testCase.want, got)
+			}
+		})
+	}
+}
+
+func TestDailyQuotaQueryServiceRequiresBothBalanceTypes(t *testing.T) {
 	for _, testCase := range []struct {
 		name   string
 		stdout string
-		want   string
 	}{
-		{name: "json number", stdout: `{"remaining":135.745766}`, want: "135.75"},
-		{name: "integer number", stdout: `{"remaining":42}`, want: "42.00"},
-		{name: "numeric string", stdout: `{"remaining":"42.5"}`, want: "42.50"},
-		{name: "dollar-prefixed string", stdout: `{"remaining":"$42.5"}`, want: "42.50"},
+		{name: "old top-level remaining", stdout: `{"status":"ok","remaining":1}`},
+		{name: "missing daily refresh", stdout: `{"status":"ok","pay_as_you_go":{"status":"ok","remaining":1}}`},
+		{name: "missing pay as you go", stdout: `{"status":"ok","daily_refresh":{"status":"ok","remaining":1}}`},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			service := NewDailyQuotaQueryServiceWithOptions(DailyQuotaQueryOptions{
@@ -73,8 +99,8 @@ func TestDailyQuotaQueryServiceFormatsRemainingWithTwoDecimals(t *testing.T) {
 
 			got := service.GetDailyQuota(context.Background())
 
-			if got.Status != "ok" || got.Remaining != testCase.want {
-				t.Fatalf("expected remaining %s, got %+v", testCase.want, got)
+			if got.Status != "failed" || got.DailyRefresh.Status != "" || got.PayAsYouGo.Status != "" {
+				t.Fatalf("expected strict invalid payload to fail without balances, got %+v", got)
 			}
 		})
 	}
@@ -96,7 +122,7 @@ func TestDailyQuotaQueryServiceCachesFailedResult(t *testing.T) {
 	first := service.GetDailyQuota(context.Background())
 	second := service.GetDailyQuota(context.Background())
 
-	if first.Status != "failed" || first.Remaining != "" || second != first {
+	if first.Status != "failed" || first.DailyRefresh.Status != "" || first.PayAsYouGo.Status != "" || second != first {
 		t.Fatalf("expected failed response to be cached, got first=%+v second=%+v", first, second)
 	}
 	if calls != 1 {
@@ -116,13 +142,14 @@ func TestDailyQuotaQueryServiceTreatsInvalidCommandsAndPayloadsAsFailed(t *testi
 		{name: "command error", command: "uv run query_amount.py", err: errors.New("exit status 1"), wantCalls: 1},
 		{name: "invalid json", command: "uv run query_amount.py", stdout: `not json`, wantCalls: 1},
 		{name: "multiple json values", command: "uv run query_amount.py", stdout: `{"remaining":1}{"remaining":2}`, wantCalls: 1},
-		{name: "missing remaining", command: "uv run query_amount.py", stdout: `{"status":"ok"}`, wantCalls: 1},
-		{name: "null remaining", command: "uv run query_amount.py", stdout: `{"remaining":null}`, wantCalls: 1},
-		{name: "blank string remaining", command: "uv run query_amount.py", stdout: `{"remaining":"  "}`, wantCalls: 1},
-		{name: "non-numeric string remaining", command: "uv run query_amount.py", stdout: `{"remaining":"not a number"}`, wantCalls: 1},
-		{name: "nan string remaining", command: "uv run query_amount.py", stdout: `{"remaining":"NaN"}`, wantCalls: 1},
-		{name: "infinite string remaining", command: "uv run query_amount.py", stdout: `{"remaining":"Infinity"}`, wantCalls: 1},
-		{name: "object remaining", command: "uv run query_amount.py", stdout: `{"remaining":{"value":1}}`, wantCalls: 1},
+		{name: "missing pay as you go", command: "uv run query_amount.py", stdout: `{"daily_refresh":{"status":"ok","remaining":1}}`, wantCalls: 1},
+		{name: "null remaining", command: "uv run query_amount.py", stdout: `{"daily_refresh":{"status":"ok","remaining":null},"pay_as_you_go":{"status":"ok","remaining":1}}`, wantCalls: 1},
+		{name: "blank string remaining", command: "uv run query_amount.py", stdout: `{"daily_refresh":{"status":"ok","remaining":"  "},"pay_as_you_go":{"status":"ok","remaining":1}}`, wantCalls: 1},
+		{name: "non-numeric string remaining", command: "uv run query_amount.py", stdout: `{"daily_refresh":{"status":"ok","remaining":"not a number"},"pay_as_you_go":{"status":"ok","remaining":1}}`, wantCalls: 1},
+		{name: "nan string remaining", command: "uv run query_amount.py", stdout: `{"daily_refresh":{"status":"ok","remaining":"NaN"},"pay_as_you_go":{"status":"ok","remaining":1}}`, wantCalls: 1},
+		{name: "infinite string remaining", command: "uv run query_amount.py", stdout: `{"daily_refresh":{"status":"ok","remaining":"Infinity"},"pay_as_you_go":{"status":"ok","remaining":1}}`, wantCalls: 1},
+		{name: "object remaining", command: "uv run query_amount.py", stdout: `{"daily_refresh":{"status":"ok","remaining":{"value":1}},"pay_as_you_go":{"status":"ok","remaining":1}}`, wantCalls: 1},
+		{name: "unknown balance status", command: "uv run query_amount.py", stdout: `{"daily_refresh":{"status":"error","remaining":1},"pay_as_you_go":{"status":"ok","remaining":1}}`, wantCalls: 1},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			calls := 0
@@ -136,7 +163,7 @@ func TestDailyQuotaQueryServiceTreatsInvalidCommandsAndPayloadsAsFailed(t *testi
 
 			got := service.GetDailyQuota(context.Background())
 
-			if got.Status != "failed" || got.Remaining != "" {
+			if got.Status != "failed" || got.DailyRefresh.Status != "" || got.PayAsYouGo.Status != "" {
 				t.Fatalf("expected failed response, got %+v", got)
 			}
 			if calls != testCase.wantCalls {
@@ -157,7 +184,7 @@ func TestDailyQuotaQueryServiceRunsOnlyOnceForConcurrentCacheMisses(t *testing.T
 			calls++
 			runnerStarted.Done()
 			time.Sleep(10 * time.Millisecond)
-			return `{"remaining":7}`, nil
+			return `{"daily_refresh":{"status":"ok","remaining":7},"pay_as_you_go":{"status":"ok","remaining":2}}`, nil
 		},
 	})
 
@@ -174,7 +201,7 @@ func TestDailyQuotaQueryServiceRunsOnlyOnceForConcurrentCacheMisses(t *testing.T
 	wg.Wait()
 
 	for _, response := range responses {
-		if response.Status != "ok" || response.Remaining != "7.00" {
+		if response.Status != "ok" || response.DailyRefresh.Remaining != "7.00" || response.PayAsYouGo.Remaining != "2.00" {
 			t.Fatalf("expected every response to use cached command result, got %+v", responses)
 		}
 	}

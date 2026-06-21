@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -38,8 +37,6 @@ type ohMyGPTQueryService struct {
 	token      string
 	httpClient *http.Client
 }
-
-var ohMyGPTAPIKeySuffixPattern = regexp.MustCompile(`[A-Za-z0-9_-]{3,}$`)
 
 func NewOhMyGPTQueryService(endpoint, token string) OhMyGPTQueryProvider {
 	return &ohMyGPTQueryService{
@@ -89,30 +86,15 @@ func (s *ohMyGPTQueryService) QueryAPIKey(ctx context.Context, apiKey string) (O
 }
 
 func filterOhMyGPTTokensByAPIKey(tokens []OhMyGPTAPIKeyToken, apiKey string) []OhMyGPTAPIKeyToken {
-	suffix := apiKeySuffix(apiKey)
-	if suffix == "" {
+	targetKey := strings.TrimSpace(apiKey)
+	if targetKey == "" {
 		return tokens
 	}
 	filtered := make([]OhMyGPTAPIKeyToken, 0, len(tokens))
 	for _, token := range tokens {
-		if strings.HasSuffix(token.Key, suffix) {
+		if strings.TrimSpace(token.Key) == targetKey {
 			filtered = append(filtered, token)
 		}
 	}
 	return filtered
-}
-
-func apiKeySuffix(apiKey string) string {
-	trimmed := strings.TrimSpace(apiKey)
-	if trimmed == "" {
-		return ""
-	}
-	match := ohMyGPTAPIKeySuffixPattern.FindString(trimmed)
-	if len(match) < 3 {
-		return ""
-	}
-	if len(match) <= 3 {
-		return match
-	}
-	return match[len(match)-3:]
 }

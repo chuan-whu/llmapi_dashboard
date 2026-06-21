@@ -116,9 +116,14 @@ const ALL_REQUEST_EVENTS_FILTER = '__all__';
 const OVERVIEW_AUTO_REFRESH_INTERVAL_MS = 10_000;
 export const DAILY_QUOTA_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 
-type DailyQuotaDisplay = {
-  status: 'loading' | 'ok' | 'failed';
+type QuotaBalanceDisplay = {
+  status: 'loading' | 'ok' | 'partial' | 'failed';
   remaining?: string;
+};
+
+type DailyQuotaDisplay = {
+  dailyRefresh: QuotaBalanceDisplay;
+  payAsYouGo: QuotaBalanceDisplay;
 };
 
 export const getCredentialSectionVisibility = (tab: string) => ({
@@ -137,19 +142,34 @@ export const isUsagePageVisible = (documentRef?: Pick<Document, 'visibilityState
 export const getBackToCPALinkURL = () => '';
 export const getUpdateCheckToastDuration = (kind: 'success' | 'info' | 'error') => (kind === 'error' ? 6_000 : 4_000);
 
-export const normalizeDailyQuotaDisplay = (response: DailyQuotaResponse): DailyQuotaDisplay => {
-  const remaining = typeof response.remaining === 'string' ? response.remaining.trim() : '';
+const loadingDailyQuotaDisplay = (): DailyQuotaDisplay => ({
+  dailyRefresh: { status: 'loading' },
+  payAsYouGo: { status: 'loading' },
+});
+
+const failedDailyQuotaDisplay = (): DailyQuotaDisplay => ({
+  dailyRefresh: { status: 'failed' },
+  payAsYouGo: { status: 'failed' },
+});
+
+const normalizeQuotaBalanceDisplay = (balance: DailyQuotaResponse['daily_refresh']): QuotaBalanceDisplay => {
+  const remaining = typeof balance?.remaining === 'string' ? balance.remaining.trim() : '';
   const normalizedRemaining = remaining.startsWith('$') ? remaining.slice(1).trim() : remaining;
   const parsedRemaining = Number(normalizedRemaining);
-  if (response.status === 'ok' && normalizedRemaining && Number.isFinite(parsedRemaining)) {
-    return { status: 'ok', remaining: parsedRemaining.toFixed(2) };
+  if ((balance?.status === 'ok' || balance?.status === 'partial') && normalizedRemaining && Number.isFinite(parsedRemaining)) {
+    return { status: balance.status, remaining: parsedRemaining.toFixed(2) };
   }
   return { status: 'failed' };
 };
 
-export const formatDailyQuotaDisplayText = (display: DailyQuotaDisplay, translate: Translate): string => {
-  const label = translate('usage_stats.daily_quota_label');
-  if (display.status === 'ok' && display.remaining) {
+export const normalizeDailyQuotaDisplay = (response: DailyQuotaResponse): DailyQuotaDisplay => ({
+  dailyRefresh: normalizeQuotaBalanceDisplay(response.daily_refresh),
+  payAsYouGo: normalizeQuotaBalanceDisplay(response.pay_as_you_go),
+});
+
+export const formatDailyQuotaDisplayText = (display: QuotaBalanceDisplay, labelKey: string, translate: Translate): string => {
+  const label = translate(labelKey);
+  if ((display.status === 'ok' || display.status === 'partial') && display.remaining) {
     return `${label}：$${display.remaining}`;
   }
   if (display.status === 'loading') {
@@ -575,7 +595,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const [modelInfoError, setModelInfoError] = useState('');
   const [manualRefreshLoading, setManualRefreshLoading] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [dailyQuotaDisplay, setDailyQuotaDisplay] = useState<DailyQuotaDisplay>({ status: 'loading' });
+  const [dailyQuotaDisplay, setDailyQuotaDisplay] = useState<DailyQuotaDisplay>(loadingDailyQuotaDisplay);
   const customStartInputRef = useRef<HTMLInputElement | null>(null);
   const customEndInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -813,7 +833,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
         onAuthRequired?.();
         return;
       }
-      setDailyQuotaDisplay({ status: 'failed' });
+      setDailyQuotaDisplay(failedDailyQuotaDisplay());
     }
   }, [onAuthRequired]);
 
@@ -944,7 +964,8 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const themeOptions = useMemo(() => THEME_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) })), [t]);
   const apiKeySelectOptions = useMemo(() => getApiKeySelectOptions(apiKeyOptions, t), [apiKeyOptions, t]);
   const tutorialURL = tutorialPDFURL();
-  const dailyQuotaText = formatDailyQuotaDisplayText(dailyQuotaDisplay, t);
+  const dailyQuotaText = formatDailyQuotaDisplayText(dailyQuotaDisplay.dailyRefresh, 'usage_stats.daily_quota_daily_refresh_label', t);
+  const payAsYouGoQuotaText = formatDailyQuotaDisplayText(dailyQuotaDisplay.payAsYouGo, 'usage_stats.daily_quota_pay_as_you_go_label', t);
   const lastSyncAt = lastRefreshedAt;
 
   const handleCustomDateInputActivate = (event: SyntheticEvent<HTMLInputElement>) => {
@@ -973,6 +994,9 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
               )}
               <div className={styles.dailyQuotaBox} role="status" aria-live="polite" title={dailyQuotaText}>
                 {dailyQuotaText}
+              </div>
+              <div className={styles.payAsYouGoQuotaBox} role="status" aria-live="polite" title={payAsYouGoQuotaText}>
+                {payAsYouGoQuotaText}
               </div>
             </div>
           </div>

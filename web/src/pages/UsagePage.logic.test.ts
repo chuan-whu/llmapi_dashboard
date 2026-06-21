@@ -93,33 +93,53 @@ describe('UsagePage read-only dashboard scope', () => {
 
 describe('UsagePage daily quota display', () => {
   const translate = (key: string) => ({
-    'usage_stats.daily_quota_label': '今日剩余额度',
+    'usage_stats.daily_quota_daily_refresh_label': '每日刷新余额',
+    'usage_stats.daily_quota_pay_as_you_go_label': '按量计费余额',
     'usage_stats.daily_quota_loading': '加载中...',
     'usage_stats.daily_quota_failed': '查询失败',
   }[key] ?? key);
 
-  it('formats successful daily quota responses with a dollar prefix', () => {
-    const display = normalizeDailyQuotaDisplay({ status: 'ok', remaining: '135.745766' });
+  it('formats successful quota balance responses with a dollar prefix', () => {
+    const display = normalizeDailyQuotaDisplay({
+      status: 'ok',
+      daily_refresh: { status: 'ok', remaining: '135.745766' },
+      pay_as_you_go: { status: 'ok', remaining: '$42.5' },
+    });
 
-    expect(display).toEqual({ status: 'ok', remaining: '135.75' });
-    expect(formatDailyQuotaDisplayText(display, translate)).toBe('今日剩余额度：$135.75');
+    expect(display).toEqual({
+      dailyRefresh: { status: 'ok', remaining: '135.75' },
+      payAsYouGo: { status: 'ok', remaining: '42.50' },
+    });
+    expect(formatDailyQuotaDisplayText(display.dailyRefresh, 'usage_stats.daily_quota_daily_refresh_label', translate)).toBe('每日刷新余额：$135.75');
+    expect(formatDailyQuotaDisplayText(display.payAsYouGo, 'usage_stats.daily_quota_pay_as_you_go_label', translate)).toBe('按量计费余额：$42.50');
   });
 
-  it('formats numeric string and dollar-prefixed daily quota responses to two decimals', () => {
-    expect(normalizeDailyQuotaDisplay({ status: 'ok', remaining: '42' })).toEqual({ status: 'ok', remaining: '42.00' });
-    expect(normalizeDailyQuotaDisplay({ status: 'ok', remaining: '$42.5' })).toEqual({ status: 'ok', remaining: '42.50' });
+  it('formats partial balance responses to two decimals', () => {
+    expect(normalizeDailyQuotaDisplay({
+      status: 'partial',
+      daily_refresh: { status: 'partial', remaining: '42' },
+      pay_as_you_go: { status: 'partial', remaining: '$7.5' },
+    })).toEqual({
+      dailyRefresh: { status: 'partial', remaining: '42.00' },
+      payAsYouGo: { status: 'partial', remaining: '7.50' },
+    });
   });
 
   it('shows query failed for failed or malformed responses', () => {
-    expect(formatDailyQuotaDisplayText(normalizeDailyQuotaDisplay({ status: 'failed' }), translate)).toBe('今日剩余额度：查询失败');
-    expect(formatDailyQuotaDisplayText(normalizeDailyQuotaDisplay({ status: 'ok' }), translate)).toBe('今日剩余额度：查询失败');
-    expect(formatDailyQuotaDisplayText(normalizeDailyQuotaDisplay({ status: 'ok', remaining: '  ' }), translate)).toBe('今日剩余额度：查询失败');
-    expect(formatDailyQuotaDisplayText(normalizeDailyQuotaDisplay({ status: 'ok', remaining: 'not a number' }), translate)).toBe('今日剩余额度：查询失败');
+    const display = normalizeDailyQuotaDisplay({
+      status: 'partial',
+      daily_refresh: { status: 'failed' },
+      pay_as_you_go: { status: 'ok', remaining: 'not a number' },
+    });
+
+    expect(formatDailyQuotaDisplayText(display.dailyRefresh, 'usage_stats.daily_quota_daily_refresh_label', translate)).toBe('每日刷新余额：查询失败');
+    expect(formatDailyQuotaDisplayText(display.payAsYouGo, 'usage_stats.daily_quota_pay_as_you_go_label', translate)).toBe('按量计费余额：查询失败');
   });
 
   it('uses a 10 minute refresh interval and has an initial loading label', () => {
     expect(DAILY_QUOTA_REFRESH_INTERVAL_MS).toBe(10 * 60 * 1000);
-    expect(formatDailyQuotaDisplayText({ status: 'loading' }, translate)).toBe('今日剩余额度：加载中...');
+    expect(formatDailyQuotaDisplayText({ status: 'loading' }, 'usage_stats.daily_quota_daily_refresh_label', translate)).toBe('每日刷新余额：加载中...');
+    expect(formatDailyQuotaDisplayText({ status: 'loading' }, 'usage_stats.daily_quota_pay_as_you_go_label', translate)).toBe('按量计费余额：加载中...');
   });
 });
 

@@ -389,9 +389,17 @@ export interface ModelInfoQueryResponse {
   [key: string]: unknown
 }
 
-export interface DailyQuotaResponse {
-  status: 'ok' | 'failed'
+export type DailyQuotaStatus = 'ok' | 'partial' | 'failed'
+
+export interface DailyQuotaBalanceResponse {
+  status: DailyQuotaStatus
   remaining?: string
+}
+
+export interface DailyQuotaResponse {
+  status: DailyQuotaStatus
+  daily_refresh?: DailyQuotaBalanceResponse
+  pay_as_you_go?: DailyQuotaBalanceResponse
 }
 
 export interface PricingResponse {

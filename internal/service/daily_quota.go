@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"os/exec"
 	"runtime"
@@ -15,8 +16,9 @@ import (
 )
 
 const (
-	DailyQuotaStatusOK     = "ok"
-	DailyQuotaStatusFailed = "failed"
+	DailyQuotaStatusOK      = "ok"
+	DailyQuotaStatusPartial = "partial"
+	DailyQuotaStatusFailed  = "failed"
 )
 
 const (
@@ -29,8 +31,30 @@ type DailyQuotaProvider interface {
 }
 
 type DailyQuotaResponse struct {
+	Status       string            `json:"status"`
+	DailyRefresh DailyQuotaBalance `json:"daily_refresh,omitempty"`
+	PayAsYouGo   DailyQuotaBalance `json:"pay_as_you_go,omitempty"`
+}
+
+type DailyQuotaBalance struct {
 	Status    string `json:"status"`
 	Remaining string `json:"remaining,omitempty"`
+}
+
+func (r DailyQuotaResponse) MarshalJSON() ([]byte, error) {
+	type dailyQuotaResponseJSON struct {
+		Status       string             `json:"status"`
+		DailyRefresh *DailyQuotaBalance `json:"daily_refresh,omitempty"`
+		PayAsYouGo   *DailyQuotaBalance `json:"pay_as_you_go,omitempty"`
+	}
+	payload := dailyQuotaResponseJSON{Status: r.Status}
+	if r.DailyRefresh.Status != "" {
+		payload.DailyRefresh = &r.DailyRefresh
+	}
+	if r.PayAsYouGo.Status != "" {
+		payload.PayAsYouGo = &r.PayAsYouGo
+	}
+	return json.Marshal(payload)
 }
 
 type DailyQuotaCommandRequest struct {
@@ -130,32 +154,85 @@ func (s *DailyQuotaQueryService) query(ctx context.Context) DailyQuotaResponse {
 	if err != nil {
 		return DailyQuotaResponse{Status: DailyQuotaStatusFailed}
 	}
-	remaining, err := parseDailyQuotaRemaining(stdout)
+	result, err := parseDailyQuotaResponse(stdout)
 	if err != nil {
 		return DailyQuotaResponse{Status: DailyQuotaStatusFailed}
 	}
-	return DailyQuotaResponse{Status: DailyQuotaStatusOK, Remaining: remaining}
+	return result
 }
 
-func parseDailyQuotaRemaining(stdout string) (string, error) {
+func parseDailyQuotaResponse(stdout string) (DailyQuotaResponse, error) {
 	trimmed := strings.TrimSpace(stdout)
 	if trimmed == "" {
-		return "", fmt.Errorf("daily quota query returned empty output")
+		return DailyQuotaResponse{}, fmt.Errorf("daily quota query returned empty output")
 	}
 
 	decoder := json.NewDecoder(strings.NewReader(trimmed))
 	decoder.UseNumber()
-	var payload map[string]any
+	var payload map[string]json.RawMessage
 	if err := decoder.Decode(&payload); err != nil {
-		return "", fmt.Errorf("decode daily quota query response: %w", err)
+		return DailyQuotaResponse{}, fmt.Errorf("decode daily quota query response: %w", err)
 	}
-	if decoder.More() {
-		return "", fmt.Errorf("daily quota query response contains multiple JSON values")
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return DailyQuotaResponse{}, fmt.Errorf("daily quota query response contains multiple JSON values")
 	}
 
-	value, ok := payload["remaining"]
-	if !ok || value == nil {
-		return "", fmt.Errorf("daily quota remaining is missing")
+	dailyRaw, ok := payload["daily_refresh"]
+	if !ok {
+		return DailyQuotaResponse{}, fmt.Errorf("daily refresh balance is missing")
+	}
+	payAsYouGoRaw, ok := payload["pay_as_you_go"]
+	if !ok {
+		return DailyQuotaResponse{}, fmt.Errorf("pay-as-you-go balance is missing")
+	}
+	dailyRefresh, err := parseDailyQuotaBalance(dailyRaw, "daily_refresh")
+	if err != nil {
+		return DailyQuotaResponse{}, err
+	}
+	payAsYouGo, err := parseDailyQuotaBalance(payAsYouGoRaw, "pay_as_you_go")
+	if err != nil {
+		return DailyQuotaResponse{}, err
+	}
+	return DailyQuotaResponse{
+		Status:       calculateDailyQuotaStatus(dailyRefresh, payAsYouGo),
+		DailyRefresh: dailyRefresh,
+		PayAsYouGo:   payAsYouGo,
+	}, nil
+}
+
+func parseDailyQuotaBalance(raw json.RawMessage, fieldName string) (DailyQuotaBalance, error) {
+	if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
+		return DailyQuotaBalance{}, fmt.Errorf("%s balance is missing", fieldName)
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.UseNumber()
+	var payload map[string]any
+	if err := decoder.Decode(&payload); err != nil {
+		return DailyQuotaBalance{}, fmt.Errorf("decode %s balance: %w", fieldName, err)
+	}
+	status, ok := payload["status"].(string)
+	if !ok {
+		return DailyQuotaBalance{}, fmt.Errorf("%s status is missing", fieldName)
+	}
+	status = strings.TrimSpace(status)
+	switch status {
+	case DailyQuotaStatusOK, DailyQuotaStatusPartial:
+		remaining, err := parseDailyQuotaRemainingValue(payload["remaining"], fieldName)
+		if err != nil {
+			return DailyQuotaBalance{}, err
+		}
+		return DailyQuotaBalance{Status: status, Remaining: remaining}, nil
+	case DailyQuotaStatusFailed:
+		return DailyQuotaBalance{Status: DailyQuotaStatusFailed}, nil
+	default:
+		return DailyQuotaBalance{}, fmt.Errorf("%s status is unsupported", fieldName)
+	}
+}
+
+func parseDailyQuotaRemainingValue(value any, fieldName string) (string, error) {
+	if value == nil {
+		return "", fmt.Errorf("%s remaining is missing", fieldName)
 	}
 	switch typed := value.(type) {
 	case json.Number:
@@ -165,8 +242,18 @@ func parseDailyQuotaRemaining(stdout string) (string, error) {
 		remaining = strings.TrimSpace(strings.TrimPrefix(remaining, "$"))
 		return formatDailyQuotaRemaining(remaining)
 	default:
-		return "", fmt.Errorf("daily quota remaining has unsupported type")
+		return "", fmt.Errorf("%s remaining has unsupported type", fieldName)
 	}
+}
+
+func calculateDailyQuotaStatus(dailyRefresh DailyQuotaBalance, payAsYouGo DailyQuotaBalance) string {
+	if dailyRefresh.Status == DailyQuotaStatusOK && payAsYouGo.Status == DailyQuotaStatusOK {
+		return DailyQuotaStatusOK
+	}
+	if dailyRefresh.Status == DailyQuotaStatusFailed && payAsYouGo.Status == DailyQuotaStatusFailed {
+		return DailyQuotaStatusFailed
+	}
+	return DailyQuotaStatusPartial
 }
 
 func formatDailyQuotaRemaining(value string) (string, error) {

@@ -29,7 +29,11 @@ describe('fetchUsageEvents', () => {
     vi.stubGlobal('window', { __APP_BASE_PATH__: undefined });
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ status: 'ok', remaining: '135.745766' }),
+      json: async () => ({
+        status: 'ok',
+        daily_refresh: { status: 'ok', remaining: '135.75' },
+        pay_as_you_go: { status: 'ok', remaining: '42.50' },
+      }),
     } as Response);
     const signal = new AbortController().signal;
 
@@ -38,7 +42,11 @@ describe('fetchUsageEvents', () => {
     const [url, init] = fetchMock.mock.calls[0];
     const parsed = new URL(String(url), 'http://localhost');
 
-    expect(response).toEqual({ status: 'ok', remaining: '135.745766' });
+    expect(response).toEqual({
+      status: 'ok',
+      daily_refresh: { status: 'ok', remaining: '135.75' },
+      pay_as_you_go: { status: 'ok', remaining: '42.50' },
+    });
     expect(parsed.pathname).toBe('/api/v1/daily-quota');
     expect(init).toMatchObject({ credentials: 'include', signal, cache: 'no-store' });
   });

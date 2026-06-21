@@ -162,8 +162,8 @@ Only the following application settings are used:
 | `AVAILABLE_MODELS_API_KEY` | No | empty | API key used only to load the available model list |
 | `OHMYGPT_QUERY_URL` | No | empty | Oh My GPT quota query endpoint used by the Model & Query page |
 | `OHMYGPT_QUERY_TOKEN` | No | empty | Bearer token used by the Oh My GPT quota query endpoint |
-| `DAILY_QUOTA_QUERY_COMMAND` | No | empty | Command used for the top-bar daily remaining quota display; stdout must be a JSON object with a top-level `remaining` field |
-| `DAILY_QUOTA_CACHE_TTL` | No | `10m` | In-memory cache duration for the daily quota command; invalid, zero, or negative values fall back to `10m` |
+| `DAILY_QUOTA_QUERY_COMMAND` | No | empty | Command used for the top-bar balance display; stdout must contain `daily_refresh` and `pay_as_you_go` balance objects |
+| `DAILY_QUOTA_CACHE_TTL` | No | `10m` | In-memory cache duration for the balance command; invalid, zero, or negative values fall back to `10m` |
 
 `APP_BASE_PATH` must be empty or start with `/`; for example `/keeper`. `/keeper/` is normalized to `/keeper`.
 Relative `TUTORIAL_PDF_PATH` values are resolved from the `.env` file directory.
@@ -171,7 +171,7 @@ Relative `TUTORIAL_PDF_PATH` values are resolved from the `.env` file directory.
 
 Leave either `OHMYGPT_QUERY_URL` or `OHMYGPT_QUERY_TOKEN` empty to disable Oh My GPT quota lookup. The browser only posts the API key to this app; the configured bearer token is used server-side.
 
-`DAILY_QUOTA_QUERY_COMMAND` runs server-side with shell semantics. Relative commands run from the `.env` file directory when a `.env` file is loaded. The result is rounded to two decimals and cached in memory for `DAILY_QUOTA_CACHE_TTL`; command errors, invalid JSON, non-numeric `remaining`, or missing `remaining` show `Query failed` in the header.
+`DAILY_QUOTA_QUERY_COMMAND` runs server-side with shell semantics. Relative commands run from the `.env` file directory when a `.env` file is loaded. Stdout must be JSON shaped like `{"status":"ok","daily_refresh":{"status":"ok","remaining":12.34},"pay_as_you_go":{"status":"ok","remaining":56.78}}`. Each balance status may be `ok`, `partial`, or `failed`; `ok` and `partial` require a numeric `remaining`. Results are rounded to two decimals and cached in memory for `DAILY_QUOTA_CACHE_TTL`; command errors, invalid JSON, missing balance objects, or non-numeric balances show `Query failed` in the affected header balance boxes.
 
 ## Nginx Reverse Proxy
 

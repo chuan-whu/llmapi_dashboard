@@ -13,7 +13,11 @@ import (
 
 func TestReadOnlyDailyQuotaRouteReturnsProviderResult(t *testing.T) {
 	provider := &dailyQuotaProviderStub{
-		response: service.DailyQuotaResponse{Status: "ok", Remaining: "135.75"},
+		response: service.DailyQuotaResponse{
+			Status:       "partial",
+			DailyRefresh: service.DailyQuotaBalance{Status: "ok", Remaining: "135.75"},
+			PayAsYouGo:   service.DailyQuotaBalance{Status: "failed"},
+		},
 	}
 	router := NewReadOnlyRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", provider)
 
@@ -21,7 +25,7 @@ func TestReadOnlyDailyQuotaRouteReturnsProviderResult(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/daily-quota", nil)
 	router.ServeHTTP(resp, req)
 
-	if resp.Code != http.StatusOK || resp.Body.String() != `{"status":"ok","remaining":"135.75"}` {
+	if resp.Code != http.StatusOK || resp.Body.String() != `{"status":"partial","daily_refresh":{"status":"ok","remaining":"135.75"},"pay_as_you_go":{"status":"failed"}}` {
 		t.Fatalf("unexpected daily quota response: %d %s", resp.Code, resp.Body.String())
 	}
 	if provider.calls != 1 {
@@ -44,7 +48,11 @@ func TestReadOnlyDailyQuotaRouteReturnsFailedWithoutProvider(t *testing.T) {
 func TestDailyQuotaRouteRequiresAdminSessionWhenAuthEnabled(t *testing.T) {
 	authConfig := AuthConfig{Enabled: true, LoginPassword: "secret", SessionTTL: time.Hour}
 	router := NewReadOnlyRouter(nil, nil, nil, nil, authConfig, NewAuthHandler(authConfig, auth.NewSessionManager(time.Hour)), "", &dailyQuotaProviderStub{
-		response: service.DailyQuotaResponse{Status: "ok", Remaining: "1"},
+		response: service.DailyQuotaResponse{
+			Status:       "ok",
+			DailyRefresh: service.DailyQuotaBalance{Status: "ok", Remaining: "1.00"},
+			PayAsYouGo:   service.DailyQuotaBalance{Status: "ok", Remaining: "2.00"},
+		},
 	})
 
 	resp := httptest.NewRecorder()
