@@ -1,4 +1,4 @@
-module cpa-usage-keeper
+module llmapi-dashboard
 
 go 1.22
 

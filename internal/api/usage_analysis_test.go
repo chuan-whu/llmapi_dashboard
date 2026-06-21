@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/helper"
-	"cpa-usage-keeper/internal/service"
-	servicedto "cpa-usage-keeper/internal/service/dto"
+	"github.com/gin-gonic/gin"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/helper"
+	"llmapi-dashboard/internal/service"
+	servicedto "llmapi-dashboard/internal/service/dto"
 )
 
 type usageAnalysisStub struct {
@@ -21,24 +22,12 @@ type usageAnalysisStub struct {
 }
 
 type usageAnalysisAPIKeyStub struct {
-	rows []entities.CPAAPIKey
+	rows []entities.APIKey
 	err  error
 }
 
-func (s usageAnalysisAPIKeyStub) ListCPAAPIKeys(context.Context) ([]entities.CPAAPIKey, error) {
+func (s usageAnalysisAPIKeyStub) ListAPIKeys(context.Context) ([]entities.APIKey, error) {
 	return s.rows, s.err
-}
-
-func (s usageAnalysisAPIKeyStub) FindActiveCPAAPIKeyByValue(context.Context, string) (entities.CPAAPIKey, error) {
-	return entities.CPAAPIKey{}, service.ErrInvalidID
-}
-
-func (s usageAnalysisAPIKeyStub) FindActiveCPAAPIKeyByID(context.Context, int64) (entities.CPAAPIKey, error) {
-	return entities.CPAAPIKey{}, service.ErrInvalidID
-}
-
-func (s usageAnalysisAPIKeyStub) UpdateCPAAPIKeyAlias(context.Context, int64, string) (entities.CPAAPIKey, error) {
-	return entities.CPAAPIKey{}, service.ErrInvalidID
 }
 
 func (s *usageAnalysisStub) GetUsageOverview(context.Context, servicedto.UsageFilter) (*servicedto.UsageOverviewSnapshot, error) {
@@ -57,6 +46,10 @@ func (s *usageAnalysisStub) GetAnalysis(_ context.Context, filter servicedto.Usa
 	s.lastFilter = filter
 	s.analysisCalls++
 	return s.analysis, s.err
+}
+
+func newUsageAnalysisTestRouter(provider service.UsageProvider, apiKeyProvider service.APIKeyProvider, authConfig AuthConfig) *gin.Engine {
+	return NewReadOnlyRouter(nil, provider, nil, apiKeyProvider, authConfig, nil, "")
 }
 
 func TestUsageAnalysisReturnsAggregatedRows(t *testing.T) {
@@ -106,7 +99,7 @@ func TestUsageAnalysisReturnsAggregatedRows(t *testing.T) {
 			Requests:    2,
 		}},
 	}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "")
+	router := newUsageAnalysisTestRouter(provider, nil, AuthConfig{})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/analysis?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -148,7 +141,7 @@ func TestUsageAnalysisReturnsAggregatedRows(t *testing.T) {
 	}
 }
 
-func TestUsageAnalysisUsesMaskedCPAAPIKeysInsteadOfAliases(t *testing.T) {
+func TestUsageAnalysisUsesMaskedAPIKeysInsteadOfAliases(t *testing.T) {
 	bucket := time.Date(2026, 4, 22, 10, 0, 0, 0, time.Local)
 	lastSyncedAt := time.Date(2026, 5, 13, 10, 0, 0, 0, time.Local)
 	provider := &usageAnalysisStub{analysis: &servicedto.AnalysisSnapshot{
@@ -167,13 +160,13 @@ func TestUsageAnalysisUsesMaskedCPAAPIKeysInsteadOfAliases(t *testing.T) {
 			Requests:    2,
 		}},
 	}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "", OptionalProviders{CPAAPIKeys: usageAnalysisAPIKeyStub{rows: []entities.CPAAPIKey{{
+	router := newUsageAnalysisTestRouter(provider, usageAnalysisAPIKeyStub{rows: []entities.APIKey{{
 		ID:           1,
 		APIKey:       "sk-alpha123456",
 		DisplayKey:   "sk-*********123456",
 		KeyAlias:     "Primary Key",
 		LastSyncedAt: &lastSyncedAt,
-	}}}})
+	}}}, AuthConfig{})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/analysis?range=24h&api_key_id=1", nil)
 	resp := httptest.NewRecorder()
 
@@ -184,7 +177,7 @@ func TestUsageAnalysisUsesMaskedCPAAPIKeysInsteadOfAliases(t *testing.T) {
 	}
 	body := resp.Body.String()
 	if !contains(body, `"key":"1"`) || !contains(body, `"label":"sk-a*****************3456"`) || !contains(body, `"api_key":"sk-a*****************3456"`) {
-		t.Fatalf("expected analysis payload to use CPA API key id and masked key label, got %s", body)
+		t.Fatalf("expected analysis payload to use API key id and masked key label, got %s", body)
 	}
 	if contains(body, "Primary Key") || contains(body, "sk-alpha123456") || contains(body, "sk-*********123456") {
 		t.Fatalf("expected alias, raw key, and stale masks to stay hidden, got %s", body)
@@ -210,7 +203,7 @@ func TestBuildAnalysisHeatmapPayloadSortsKeysByRequests(t *testing.T) {
 }
 
 func TestUsageAnalysisRequiresAuthWhenEnabled(t *testing.T) {
-	router := NewRouter(nil, nil, &usageAnalysisStub{}, nil, AuthConfig{Enabled: true, LoginPassword: "secret", SessionTTL: time.Hour}, nil, "")
+	router := newUsageAnalysisTestRouter(&usageAnalysisStub{}, nil, AuthConfig{Enabled: true, LoginPassword: "secret", SessionTTL: time.Hour})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/analysis", nil)
 	resp := httptest.NewRecorder()
 

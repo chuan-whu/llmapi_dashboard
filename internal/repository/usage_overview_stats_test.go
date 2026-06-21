@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/timeutil"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/timeutil"
 )
 
 func TestAggregateUsageOverviewStatsAggregatesIncrementallyAndIdempotently(t *testing.T) {

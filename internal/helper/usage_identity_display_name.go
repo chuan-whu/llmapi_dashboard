@@ -3,7 +3,7 @@ package helper
 import (
 	"strings"
 
-	"cpa-usage-keeper/internal/entities"
+	"llmapi-dashboard/internal/entities"
 )
 
 func UsageIdentityDisplayName(item entities.UsageIdentity) string {

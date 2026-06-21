@@ -1,16 +1,14 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
-	"cpa-usage-keeper/internal/auth"
-	repodto "cpa-usage-keeper/internal/repository/dto"
-	"cpa-usage-keeper/internal/service"
-	servicedto "cpa-usage-keeper/internal/service/dto"
-	"cpa-usage-keeper/internal/timeutil"
 	"github.com/gin-gonic/gin"
+	repodto "llmapi-dashboard/internal/repository/dto"
+	"llmapi-dashboard/internal/service"
+	servicedto "llmapi-dashboard/internal/service/dto"
+	"llmapi-dashboard/internal/timeutil"
 )
 
 type usageOverviewResponse struct {
@@ -93,45 +91,6 @@ type usageOverviewServiceHealthBlock struct {
 	Rate      float64   `json:"rate"`
 }
 
-var allowedKeyOverviewRanges = map[string]struct{}{
-	"4h": {}, "8h": {}, "12h": {}, "24h": {}, "today": {}, "yesterday": {}, "7d": {}, "30d": {},
-}
-
-func registerKeyOverviewRoute(router gin.IRoutes, usageProvider service.UsageProvider, cpaAPIKeyProvider service.CPAAPIKeyProvider, authHandler *authHandler) {
-	router.GET("/key-overview", func(c *gin.Context) {
-		token, _ := c.Get("auth_token")
-		sessionValue, _ := c.Get("auth_session")
-		session, ok := sessionValue.(auth.Session)
-		if !ok || session.Role != auth.RoleAPIKeyViewer || session.CPAAPIKeyID <= 0 {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-			return
-		}
-		if cpaAPIKeyProvider == nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-			return
-		}
-		if _, err := cpaAPIKeyProvider.FindActiveCPAAPIKeyByID(c.Request.Context(), session.CPAAPIKeyID); err != nil {
-			if authHandler != nil {
-				authHandler.deleteSession(fmt.Sprint(token))
-				clearSessionCookie(c, authHandler.config.BasePath)
-			}
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-			return
-		}
-		filter, err := parseKeyOverviewFilterQuery(c.Request, timeutil.NormalizeStorageTime(time.Now()))
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if authHandler != nil && !authHandler.allowKeyOverviewRequest(fmt.Sprint(token)) {
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "too many requests"})
-			return
-		}
-		filter.APIKeyID = fmt.Sprintf("%d", session.CPAAPIKeyID)
-		writeUsageOverviewResponse(c, usageProvider, filter)
-	})
-}
-
 func registerUsageOverviewRoute(router gin.IRoutes, usageProvider service.UsageProvider) {
 	router.GET("/usage/overview", func(c *gin.Context) {
 		if usageProvider == nil {
@@ -145,18 +104,6 @@ func registerUsageOverviewRoute(router gin.IRoutes, usageProvider service.UsageP
 		}
 		writeUsageOverviewResponse(c, usageProvider, filter)
 	})
-}
-
-func parseKeyOverviewFilterQuery(req *http.Request, anchor time.Time) (servicedto.UsageFilter, error) {
-	query := req.URL.Query()
-	if query.Get("start") != "" || query.Get("end") != "" {
-		return servicedto.UsageFilter{}, fmt.Errorf("custom ranges are not supported")
-	}
-	rangeValue := query.Get("range")
-	if _, ok := allowedKeyOverviewRanges[rangeValue]; !ok {
-		return servicedto.UsageFilter{}, fmt.Errorf("unsupported key overview range %q", rangeValue)
-	}
-	return parseUsageFilterQuery(req, anchor)
 }
 
 func writeUsageOverviewResponse(c *gin.Context, usageProvider service.UsageProvider, filter servicedto.UsageFilter) {

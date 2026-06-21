@@ -7,14 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"cpa-usage-keeper/internal/auth"
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/helper"
-	"cpa-usage-keeper/internal/service"
 	"github.com/gin-gonic/gin"
+	"llmapi-dashboard/internal/auth"
 )
 
-const sessionCookieName = "cpa_usage_keeper_session"
+const sessionCookieName = "llmapi_dashboard_session"
 
 const maxFailedLoginAttempts = 5
 
@@ -26,61 +23,33 @@ type AuthConfig struct {
 }
 
 type authHandler struct {
-	config            AuthConfig
-	sessions          *auth.SessionManager
-	cpaAPIKeyProvider service.CPAAPIKeyProvider
-
-	mu                  sync.Mutex
-	failedAttempts      map[string]int
-	keyOverviewRequests map[string]time.Time
+	config         AuthConfig
+	sessions       *auth.SessionManager
+	mu             sync.Mutex
+	failedAttempts map[string]int
 }
 
 type loginRequest struct {
 	Password string `json:"password"`
 }
 
-type apiKeyLoginRequest struct {
-	APIKey string `json:"apiKey"`
-}
-
 type sessionResponse struct {
-	Authenticated bool                   `json:"authenticated"`
-	Role          auth.Role              `json:"role,omitempty"`
-	APIKey        *sessionAPIKeyResponse `json:"api_key,omitempty"`
-}
-
-type sessionAPIKeyResponse struct {
-	DisplayKey string `json:"display_key"`
-	Alias      string `json:"alias,omitempty"`
+	Authenticated bool      `json:"authenticated"`
+	Role          auth.Role `json:"role,omitempty"`
 }
 
 func NewAuthHandler(config AuthConfig, sessions *auth.SessionManager) *authHandler {
-	return &authHandler{config: config, sessions: sessions, failedAttempts: make(map[string]int), keyOverviewRequests: make(map[string]time.Time)}
-}
-
-func (h *authHandler) setCPAAPIKeyProvider(provider service.CPAAPIKeyProvider) {
-	if h != nil {
-		h.cpaAPIKeyProvider = provider
-	}
+	return &authHandler{config: config, sessions: sessions, failedAttempts: make(map[string]int)}
 }
 
 func (h *authHandler) registerRoutes(router gin.IRoutes) {
 	router.GET("/session", h.getSession)
 	router.POST("/login", h.login)
-	router.POST("/api-key-login", h.apiKeyLogin)
 	router.POST("/logout", h.logout)
-}
-
-func (h *authHandler) middleware() gin.HandlerFunc {
-	return h.roleMiddleware()
 }
 
 func (h *authHandler) adminMiddleware() gin.HandlerFunc {
 	return h.roleMiddleware(auth.RoleAdmin)
-}
-
-func (h *authHandler) apiKeyViewerMiddleware() gin.HandlerFunc {
-	return h.roleMiddleware(auth.RoleAPIKeyViewer)
 }
 
 func (h *authHandler) roleMiddleware(allowedRoles ...auth.Role) gin.HandlerFunc {
@@ -141,16 +110,7 @@ func (h *authHandler) getSession(c *gin.Context) {
 		c.JSON(http.StatusOK, sessionResponse{Authenticated: false})
 		return
 	}
-	response := sessionResponse{Authenticated: true, Role: session.Role}
-	if session.Role == auth.RoleAPIKeyViewer {
-		row, ok := h.activeViewerAPIKey(c, token, session)
-		if !ok {
-			c.JSON(http.StatusOK, sessionResponse{Authenticated: false})
-			return
-		}
-		response.APIKey = &sessionAPIKeyResponse{DisplayKey: helper.CPAAPIKeyMaskedDisplayKey(row)}
-	}
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, sessionResponse{Authenticated: true, Role: session.Role})
 }
 
 func (h *authHandler) login(c *gin.Context) {
@@ -193,61 +153,6 @@ func (h *authHandler) login(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func (h *authHandler) apiKeyLogin(c *gin.Context) {
-	if h == nil || !h.config.Enabled {
-		c.Status(http.StatusNoContent)
-		return
-	}
-	if h.sessions == nil || h.cpaAPIKeyProvider == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
-		return
-	}
-	clientKey := loginClientKey(c)
-	var request apiKeyLoginRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		if h.tooManyFailedAttempts(clientKey) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many failed login attempts"})
-			return
-		}
-		h.recordFailedAttempt(clientKey)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
-		return
-	}
-	row, err := h.cpaAPIKeyProvider.FindActiveCPAAPIKeyByValue(c.Request.Context(), request.APIKey)
-	if err != nil {
-		if h.tooManyFailedAttempts(clientKey) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many failed login attempts"})
-			return
-		}
-		h.recordFailedAttempt(clientKey)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
-		return
-	}
-	h.clearFailedAttempts(clientKey)
-	token, expiresAt, err := h.sessions.CreateAPIKeyViewer(row.ID)
-	if err != nil {
-		writeInternalError(c, "create api key viewer session failed", err)
-		return
-	}
-	setSessionCookie(c, h.config.BasePath, token, expiresAt)
-	c.Status(http.StatusNoContent)
-}
-
-func (h *authHandler) activeViewerAPIKey(c *gin.Context, token string, session auth.Session) (entities.CPAAPIKey, bool) {
-	if h.cpaAPIKeyProvider == nil || session.CPAAPIKeyID <= 0 {
-		h.deleteSession(token)
-		clearSessionCookie(c, h.config.BasePath)
-		return entities.CPAAPIKey{}, false
-	}
-	row, err := h.cpaAPIKeyProvider.FindActiveCPAAPIKeyByID(c.Request.Context(), session.CPAAPIKeyID)
-	if err != nil {
-		h.deleteSession(token)
-		clearSessionCookie(c, h.config.BasePath)
-		return entities.CPAAPIKey{}, false
-	}
-	return row, true
-}
-
 func (h *authHandler) logout(c *gin.Context) {
 	if h == nil || !h.config.Enabled {
 		c.Status(http.StatusNoContent)
@@ -280,20 +185,6 @@ func (h *authHandler) clearFailedAttempts(key string) {
 	delete(h.failedAttempts, key)
 }
 
-func (h *authHandler) allowKeyOverviewRequest(token string) bool {
-	if h == nil || token == "" {
-		return true
-	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	now := time.Now()
-	if last, ok := h.keyOverviewRequests[token]; ok && now.Sub(last) < time.Second {
-		return false
-	}
-	h.keyOverviewRequests[token] = now
-	return true
-}
-
 func (h *authHandler) deleteSession(token string) {
 	if h == nil || token == "" {
 		return
@@ -301,9 +192,6 @@ func (h *authHandler) deleteSession(token string) {
 	if h.sessions != nil {
 		h.sessions.Delete(token)
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	delete(h.keyOverviewRequests, token)
 }
 
 func loginClientKey(c *gin.Context) string {

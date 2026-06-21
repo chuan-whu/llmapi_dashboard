@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/helper"
-	"cpa-usage-keeper/internal/repository/dto"
-	"cpa-usage-keeper/internal/timeutil"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/helper"
+	"llmapi-dashboard/internal/repository/dto"
+	"llmapi-dashboard/internal/timeutil"
 )
 
 // usageEventProjectionColumns 限制 usage_events 查询列，避免 Overview 和列表页把 RawJSON 等大字段读入内存。
@@ -978,12 +978,12 @@ func analysisDailyBoundaryHourlyWindows(fullStart, fullDayStart, fullDayEnd, ful
 	return mergeUsageOverviewRawEventWindows(windows)
 }
 
-func loadUsageOverviewHourlyStats(db *gorm.DB, filter dto.UsageQueryFilter, start, end time.Time, activeCPAAPIKeysOnly bool) ([]entities.UsageOverviewHourlyStat, error) {
+func loadUsageOverviewHourlyStats(db *gorm.DB, filter dto.UsageQueryFilter, start, end time.Time, activeAPIKeysOnly bool) ([]entities.UsageOverviewHourlyStat, error) {
 	var rows []entities.UsageOverviewHourlyStat
 	query := db.Model(&entities.UsageOverviewHourlyStat{}).
 		Where("bucket_start >= ? AND bucket_start < ?", timeutil.FormatStorageTime(start), timeutil.FormatStorageTime(end)).
 		Order("bucket_start asc")
-	if activeCPAAPIKeysOnly {
+	if activeAPIKeysOnly {
 		query = query.Joins("INNER JOIN cpa_api_keys ON cpa_api_keys.api_key = usage_overview_hourly_stats.api_group_key AND cpa_api_keys.is_deleted = ?", false)
 	}
 	if apiGroupKey := strings.TrimSpace(filter.APIGroupKey); apiGroupKey != "" {
@@ -1004,12 +1004,12 @@ func loadAnalysisOverviewDailyStatsWithFilter(db *gorm.DB, filter dto.UsageQuery
 	return loadUsageOverviewDailyStats(db, filter, start, end, true)
 }
 
-func loadUsageOverviewDailyStats(db *gorm.DB, filter dto.UsageQueryFilter, start, end time.Time, activeCPAAPIKeysOnly bool) ([]entities.UsageOverviewDailyStat, error) {
+func loadUsageOverviewDailyStats(db *gorm.DB, filter dto.UsageQueryFilter, start, end time.Time, activeAPIKeysOnly bool) ([]entities.UsageOverviewDailyStat, error) {
 	var rows []entities.UsageOverviewDailyStat
 	query := db.Model(&entities.UsageOverviewDailyStat{}).
 		Where("bucket_start >= ? AND bucket_start < ?", timeutil.FormatStorageTime(start), timeutil.FormatStorageTime(end)).
 		Order("bucket_start asc")
-	if activeCPAAPIKeysOnly {
+	if activeAPIKeysOnly {
 		query = query.Joins("INNER JOIN cpa_api_keys ON cpa_api_keys.api_key = usage_overview_daily_stats.api_group_key AND cpa_api_keys.is_deleted = ?", false)
 	}
 	if apiGroupKey := strings.TrimSpace(filter.APIGroupKey); apiGroupKey != "" {
@@ -1133,7 +1133,7 @@ func loadUsageOverviewHealthTotalsWithFilter(db *gorm.DB, filter dto.UsageQueryF
 	return successCount + totals.SuccessCount, failureCount + totals.FailureCount, nil
 }
 
-// applyUsageOverviewHourlyStatToOverview 把小时 stats 同步写入 summary、snapshot、主序列、小时序列和天序列。
+// applyUsageOverviewHourlyStatToOverview 把小时 stats 写入 summary、snapshot、主序列、小时序列和天序列。
 func applyUsageOverviewHourlyStatToOverview(overview *dto.UsageOverviewRecord, row entities.UsageOverviewHourlyStat, bucketByDay bool, latestHourlyStart *time.Time, pricingByModel map[string]entities.ModelPriceSetting) {
 	// 小时 stats 是完整小时事实，可直接累计到 snapshot totals。
 	applyUsageOverviewHourlyStatToSnapshot(overview.Usage, row)
@@ -1421,7 +1421,7 @@ func newUsageOverviewSeriesRecord() dto.UsageOverviewSeriesRecord {
 
 // applyUsageEventToOverviewSeries 把单条事件写入总序列和 model 子序列。
 func applyUsageEventToOverviewSeries(series *dto.UsageOverviewSeriesRecord, event entities.UsageEvent, cost float64, bucketKey string, bucketMinutes int64) {
-	// 总序列按 bucket 累计请求、token、成本，并同步刷新 RPM/TPM。
+	// 总序列按 bucket 累计请求、token、成本，并刷新 RPM/TPM。
 	series.Requests[bucketKey]++
 	series.Tokens[bucketKey] += event.TotalTokens
 	series.Cost[bucketKey] += cost

@@ -3,7 +3,7 @@ package helper
 import (
 	"testing"
 
-	"cpa-usage-keeper/internal/entities"
+	"llmapi-dashboard/internal/entities"
 )
 
 func TestDisplayNameFormatsProviderNameAndPrefix(t *testing.T) {

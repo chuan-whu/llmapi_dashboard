@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"time"
 
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/helper"
-	"cpa-usage-keeper/internal/service"
 	"github.com/gin-gonic/gin"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/helper"
+	"llmapi-dashboard/internal/service"
 )
 
 type usageIdentitiesResponse struct {

@@ -9,10 +9,9 @@ func TestAllIncludesCoreModels(t *testing.T) {
 	items := All()
 	expected := []any{
 		&UsageEvent{},
-		&RedisUsageInbox{},
 		&ModelPriceSetting{},
 		&UsageIdentity{},
-		&CPAAPIKey{},
+		&APIKey{},
 		&UsageOverviewHourlyStat{},
 		&UsageOverviewDailyStat{},
 		&UsageOverviewHealthStat{},

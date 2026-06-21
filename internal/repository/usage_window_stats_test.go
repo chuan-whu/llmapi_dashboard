@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/config"
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/repository/dto"
+	"llmapi-dashboard/internal/config"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/repository/dto"
 )
 
 func TestSumUsageWindowStatsByAuthIndexUsesAuthIndexAndWindow(t *testing.T) {

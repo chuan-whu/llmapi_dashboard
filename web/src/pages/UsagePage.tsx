@@ -14,8 +14,8 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { ApiError, fetchAnalysis, fetchAvailableModels, fetchCpaApiKeyOptions, fetchDailyQuota, fetchPricing, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout, queryModelInfoByAPIKey, tutorialPDFURL } from '@/lib/api';
-import type { AnalysisResponse, CpaApiKeyOption, DailyQuotaResponse, PricingEntry, UsageEvent, UsageSourceFilterOption } from '@/lib/types';
+import { ApiError, fetchAnalysis, fetchApiKeyOptions, fetchAvailableModels, fetchDailyQuota, fetchPricing, fetchUsageEventModelFilterOptions, fetchUsageEventSourceFilterOptions, fetchUsageEvents, logout, queryModelInfoByAPIKey, tutorialPDFURL } from '@/lib/api';
+import type { AnalysisResponse, ApiKeyOption, DailyQuotaResponse, PricingEntry, UsageEvent, UsageSourceFilterOption } from '@/lib/types';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { Select } from '@/components/ui/Select';
@@ -67,9 +67,9 @@ ChartJS.register(
   Filler
 );
 
-const CHART_LINES_STORAGE_KEY = 'cli-proxy-usage-chart-lines-v1';
-const TIME_RANGE_STORAGE_KEY = 'cli-proxy-usage-time-range-v1';
-const CUSTOM_TIME_RANGE_STORAGE_KEY = 'cli-proxy-usage-custom-range-v1';
+const CHART_LINES_STORAGE_KEY = 'llmapi-dashboard-chart-lines-v1';
+const TIME_RANGE_STORAGE_KEY = 'llmapi-dashboard-time-range-v1';
+const CUSTOM_TIME_RANGE_STORAGE_KEY = 'llmapi-dashboard-custom-range-v1';
 const DEFAULT_CHART_LINES = ['all'];
 const DEFAULT_TIME_RANGE: UsageTimeRange = '8h';
 const DEFAULT_CUSTOM_WINDOW_HOURS = 8;
@@ -109,7 +109,7 @@ const USAGE_TAB_LABEL_KEYS: Record<UsageTab, string> = {
   'model-info': 'usage_stats.tab_model_info',
 };
 const DEFAULT_USAGE_TAB: UsageTab = 'overview';
-const USAGE_TAB_STORAGE_KEY = 'cli-proxy-usage-tab-v1';
+const USAGE_TAB_STORAGE_KEY = 'llmapi-dashboard-tab-v1';
 const REQUEST_EVENTS_PAGE_SIZES = [20, 50, 100, 500, 1000] as const;
 const REQUEST_EVENTS_DEFAULT_PAGE_SIZE = 100;
 const ALL_REQUEST_EVENTS_FILTER = '__all__';
@@ -126,21 +126,14 @@ type DailyQuotaDisplay = {
   payAsYouGo: QuotaBalanceDisplay;
 };
 
-export const getCredentialSectionVisibility = (tab: string) => ({
-  enabled: tab === 'ai-provider',
-  showAuthFiles: false,
-  showAiProvider: tab === 'ai-provider',
-});
+export const shouldShowAiProviderCredentials = (tab: string) => tab === 'ai-provider';
 
 export const shouldShowRangeControls = (tab: UsageTab) => tab === 'overview' || tab === 'analysis' || tab === 'events';
 export const shouldShowApiKeyFilter = (tab: UsageTab) => shouldShowRangeControls(tab);
-export const shouldShowUpdateCheckButton = () => false;
 export const isUsagePageVisible = (documentRef?: Pick<Document, 'visibilityState'>) => {
   const targetDocument = documentRef ?? (typeof document === 'undefined' ? undefined : document);
   return !targetDocument || targetDocument.visibilityState !== 'hidden';
 };
-export const getBackToCPALinkURL = () => '';
-export const getUpdateCheckToastDuration = (kind: 'success' | 'info' | 'error') => (kind === 'error' ? 6_000 : 4_000);
 
 const loadingDailyQuotaDisplay = (): DailyQuotaDisplay => ({
   dailyRefresh: { status: 'loading' },
@@ -292,8 +285,6 @@ export const scheduleOverviewAutoRefresh = ({
     targetDocument.removeEventListener('visibilitychange', handleVisibilityChange);
   };
 };
-
-export const scheduleStatusActiveHeartbeat = () => () => undefined;
 
 export const sanitizeRequestEventFilters = (
   filters: RequestEventFilterState,
@@ -488,7 +479,7 @@ export const getTimeRangeOptions = (translate: Translate) =>
     label: translate(option.labelKey),
   }));
 
-export const getApiKeySelectOptions = (apiKeyOptions: CpaApiKeyOption[], translate: Translate): Array<{ value: string; label: string }> => [
+export const getApiKeySelectOptions = (apiKeyOptions: ApiKeyOption[], translate: Translate): Array<{ value: string; label: string }> => [
   { value: '', label: translate('usage_stats.api_key_filter_all') },
   ...apiKeyOptions.map((option, index) => ({
     value: option.id,
@@ -572,7 +563,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const [customTimeRange, setCustomTimeRange] = useState(loadCustomTimeRange);
   const [chartLines, setChartLines] = useState<string[]>(loadChartLines);
   const [selectedApiKeyId, setSelectedApiKeyId] = useState('');
-  const [apiKeyOptions, setApiKeyOptions] = useState<CpaApiKeyOption[]>([]);
+  const [apiKeyOptions, setApiKeyOptions] = useState<ApiKeyOption[]>([]);
   const [apiKeyOptionsError, setApiKeyOptionsError] = useState('');
   const [analysisData, setAnalysisData] = useState<AnalysisResponse | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -604,7 +595,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
   const setTheme = useThemeStore((state) => state.setTheme);
   const isDark = resolvedTheme === 'dark';
   const isMobile = useMediaQuery('(max-width: 768px)');
-  const credentialVisibility = getCredentialSectionVisibility(activeTab);
+  const showAiProviderCredentials = shouldShowAiProviderCredentials(activeTab);
   const {
     aiProviderRows,
     aiProviderTotal,
@@ -619,8 +610,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
     error: credentialsError,
     refresh: refreshCredentials,
   } = useCredentialsTabData({
-    enabledAuthFiles: credentialVisibility.showAuthFiles,
-    enabledAiProviders: credentialVisibility.showAiProvider,
+    enabledAiProviders: showAiProviderCredentials,
     onAuthRequired,
   });
 
@@ -703,7 +693,7 @@ export function UsagePage({ onAuthRequired }: UsagePageProps) {
 
   useEffect(() => {
     const controller = new AbortController();
-    void fetchCpaApiKeyOptions(controller.signal)
+    void fetchApiKeyOptions(controller.signal)
       .then((response) => {
         setApiKeyOptions(response.options ?? []);
         setApiKeyOptionsError('');

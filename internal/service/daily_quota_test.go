@@ -14,7 +14,7 @@ func TestDailyQuotaQueryServiceCachesSuccessfulResult(t *testing.T) {
 	var capturedRequest DailyQuotaCommandRequest
 	service := NewDailyQuotaQueryServiceWithOptions(DailyQuotaQueryOptions{
 		Command:  "uv run query_amount.py",
-		WorkDir:  `G:\CodeLearning\Git\cpa-usage-keeper`,
+		WorkDir:  `G:\CodeLearning\Git\llmapi-dashboard`,
 		CacheTTL: 10 * time.Minute,
 		Timeout:  30 * time.Second,
 		Now:      func() time.Time { return now },
@@ -47,7 +47,7 @@ func TestDailyQuotaQueryServiceCachesSuccessfulResult(t *testing.T) {
 	if calls != 2 {
 		t.Fatalf("expected command to run twice after TTL expiry, got %d", calls)
 	}
-	if capturedRequest.Command != "uv run query_amount.py" || capturedRequest.WorkDir != `G:\CodeLearning\Git\cpa-usage-keeper` || capturedRequest.Timeout != 30*time.Second {
+	if capturedRequest.Command != "uv run query_amount.py" || capturedRequest.WorkDir != `G:\CodeLearning\Git\llmapi-dashboard` || capturedRequest.Timeout != 30*time.Second {
 		t.Fatalf("unexpected command request: %+v", capturedRequest)
 	}
 }

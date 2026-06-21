@@ -18,7 +18,6 @@ const DefaultTimeZone = "Asia/Shanghai"
 var (
 	DefaultWorkDir            = filepath.Join(".", "data")
 	DefaultSQLitePath         = filepath.Join(DefaultWorkDir, "app.db")
-	DefaultLogDir             = filepath.Join(DefaultWorkDir, "logs")
 	DefaultDailyQuotaCacheTTL = 10 * time.Minute
 )
 
@@ -35,37 +34,12 @@ type Config struct {
 	DailyQuotaCacheTTL     time.Duration
 	TutorialPDFPath        string
 
-	// Deprecated fields kept so lower-level packages and tests that still use the
-	// old write-capable helpers can compile while the app wires read-only mode.
-	CPAPublicURL             string
-	TLSEnabled               bool
-	TLSCertFile              string
-	TLSKeyFile               string
-	CPABaseURL               string
-	CPAManagementKey         string
-	RedisQueueAddr           string
-	RedisQueueTLS            bool
-	RedisQueueKey            string
-	RedisQueueBatchSize      int
-	RedisQueueIdleInterval   time.Duration
-	MetadataSyncInterval     time.Duration
-	QuotaAutoRefreshEnabled  bool
-	QuotaAutoRefreshInterval time.Duration
-	QuotaRefreshWorkerLimit  int
-	WorkDir                  string
-	BackupEnabled            bool
-	BackupDir                string
-	BackupInterval           time.Duration
-	BackupRetentionDays      int
-	RequestTimeout           time.Duration
-	TLSSkipVerify            bool
-	LogLevel                 string
-	LogFileEnabled           bool
-	LogDir                   string
-	LogRetentionDays         int
-	AuthEnabled              bool
-	LoginPassword            string
-	AuthSessionTTL           time.Duration
+	LogLevel       string
+	LogFileEnabled bool
+	LogDir         string
+	AuthEnabled    bool
+	LoginPassword  string
+	AuthSessionTTL time.Duration
 }
 
 type LoadOptions struct {
@@ -112,6 +86,7 @@ func Load(options LoadOptions) (*Config, error) {
 		TutorialPDFPath:        strings.TrimSpace(os.Getenv("TUTORIAL_PDF_PATH")),
 		LogLevel:               "info",
 		LogFileEnabled:         false,
+		LogDir:                 filepath.Join(DefaultWorkDir, "logs"),
 		AuthSessionTTL:         7 * 24 * time.Hour,
 	}
 	if cfg.SQLitePath == "" {

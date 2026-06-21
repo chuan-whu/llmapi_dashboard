@@ -7,7 +7,6 @@ const globalStyles = readSource(new URL('../styles/global.scss', import.meta.url
 const usagePageStyles = readSource(new URL('./UsagePage.module.scss', import.meta.url))
 const usagePageSource = readSource(new URL('./UsagePage.tsx', import.meta.url))
 const requestEventsSource = readSource(new URL('../components/usage/RequestEventsDetailsCard.tsx', import.meta.url))
-const priceSettingsSource = readSource(new URL('../components/usage/PriceSettingsCard.tsx', import.meta.url))
 const chartLineSelectorSource = readSource(new URL('../components/usage/ChartLineSelector.tsx', import.meta.url))
 const selectSource = readSource(new URL('../components/ui/Select.tsx', import.meta.url))
 const apiIndexSource = readSource(new URL('../components/usage/index.ts', import.meta.url))
@@ -58,7 +57,7 @@ describe('UsagePage toolbar styles', () => {
     expect(usagePageSource).toContain("const USAGE_TAB_OPTIONS = ['overview', 'analysis', 'events', 'ai-provider', 'model-info'] as const")
   })
 
-  it('keeps login protection controls without restoring CPA management actions', () => {
+  it('keeps login protection controls without restoring management actions', () => {
     expect(usagePageSource).toMatch(/import \{[^}]*fetchUsageEvents[^}]*logout[^}]*\} from '@\/lib\/api';/)
     expect(usagePageSource).not.toContain("t('usage_stats.check_updates')")
     expect(usagePageSource).toContain("t('common.logout')")
@@ -113,58 +112,13 @@ describe('UsagePage toolbar styles', () => {
     expect(desktopTabPillBlock).not.toContain('white-space: nowrap;')
   })
 
-  it('lets API Key Settings content scroll inside the card instead of being clipped', () => {
-    expect(usagePageStyles).toMatch(/\.apiKeySettingsCard:global\(\.card\)\s*\{[\s\S]*?min-height:\s*auto;/)
-    expect(usagePageStyles).toMatch(/\.apiKeySettingsBody\s*\{[\s\S]*?flex:\s*0 0 auto;/)
-    expect(usagePageStyles).toMatch(/\.apiKeySettingsBody\s*\{[\s\S]*?height:\s*var\(--settings-list-scroll-height\);/)
-    expect(usagePageStyles).toMatch(/\.apiKeySettingsBody\s*\{[\s\S]*?min-height:\s*0;/)
-    expect(usagePageStyles).toMatch(/\.apiKeySettingsBody\s*\{[\s\S]*?overflow-y:\s*auto;/)
-    expect(usagePageStyles).toMatch(/\.apiKeySettingsBody\s*\{[\s\S]*?padding-right:\s*4px;/)
-    const apiKeySettingsMobileBlock = usagePageStyles.slice(
-      usagePageStyles.indexOf('@include mobile {\n  .apiKeySettingsCard:global(.card)'),
-      usagePageStyles.indexOf('.pricesList')
-    )
-
-    expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeySettingsCard:global\(\.card\)\s*\{[\s\S]*?height:\s*auto;/)
-    expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeySettingsBody\s*\{[\s\S]*?height:\s*var\(--settings-list-scroll-height\);/)
-    expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeySettingsList\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);/)
-    expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeySettingsItem\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/)
-    expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeySettingsItem\s*\{[^}]*align-items:\s*stretch;/)
+  it('does not keep removed settings-page styles', () => {
+    expect(usagePageStyles).not.toContain('apiKeySettings')
     expect(usagePageStyles).not.toContain('apiKeyAlias')
-    expect(usagePageStyles).not.toContain('apiKeySettingsForm')
-    expect(usagePageStyles).not.toContain('apiKeySettingsSaveButton')
-  })
-
-  it('keeps Model Pricing Settings list viewport aligned with API Key Settings without shrinking it behind the form', () => {
-    const settingsSectionsBlock = usagePageStyles.slice(
-      usagePageStyles.indexOf('.settingsSections {'),
-      usagePageStyles.indexOf('// Pricing Section')
-    )
-    const pricingBlock = usagePageStyles.slice(
-      usagePageStyles.indexOf('.pricingFixedCard {'),
-      usagePageStyles.indexOf('.priceForm')
-    )
-    const apiKeyBodyBlock = usagePageStyles.slice(
-      usagePageStyles.indexOf('.apiKeySettingsBody {'),
-      usagePageStyles.indexOf('.apiKeySettingsList')
-    )
-    const apiKeySettingsMobileBlock = usagePageStyles.slice(
-      usagePageStyles.indexOf('@include mobile {\n  .apiKeySettingsCard:global(.card)'),
-      usagePageStyles.indexOf('.pricesList')
-    )
-    const pricingGridBlock = usagePageStyles.slice(
-      usagePageStyles.indexOf('.pricesGrid {'),
-      usagePageStyles.indexOf('.priceItem')
-    )
-
-    expect(settingsSectionsBlock).toMatch(/--settings-list-scroll-height:\s*480px;/)
-    expect(pricingBlock).toMatch(/\.pricingFixedCard\s*\{[\s\S]*?height:\s*auto;/)
-    expect(pricingBlock).not.toMatch(/\.pricingSection\s*\{[\s\S]*?height:\s*480px;/)
-    expect(apiKeyBodyBlock).toMatch(/height:\s*var\(--settings-list-scroll-height\);/)
-    expect(apiKeySettingsMobileBlock).toMatch(/\.apiKeySettingsBody\s*\{[\s\S]*?height:\s*var\(--settings-list-scroll-height\);/)
-    expect(pricingGridBlock).toMatch(/height:\s*var\(--settings-list-scroll-height\);/)
-    expect(pricingGridBlock).toMatch(/\.pricesGrid\s*\{[\s\S]*?overflow:\s*auto;/)
-    expect(pricingGridBlock).not.toMatch(/@include mobile\s*\{[\s\S]*?overflow:\s*visible;/)
+    expect(usagePageStyles).not.toContain('settingsSections')
+    expect(usagePageStyles).not.toContain('pricingFixedCard')
+    expect(usagePageStyles).not.toContain('pricesGrid')
+    expect(usagePageStyles).not.toContain('priceItem')
   })
 
   it('keeps the Analysis chart presentation aligned with the reference design', () => {
@@ -358,7 +312,7 @@ describe('UsagePage toolbar styles', () => {
     expect(usagePageSource).toContain('dropdownMinWidth={180}')
   })
 
-  it('preserves the original desktop toolbar sizing while isolating refresh layout', () => {
+  it('preserves desktop toolbar sizing while isolating refresh layout', () => {
     expect(usagePageStyles).toMatch(/\.toolbarActionsRight\s*\{[\s\S]*?align-items:\s*center;/)
     expect(usagePageStyles).toMatch(/\.usageFilterBar\s*\{[\s\S]*?align-items:\s*center;/)
     expect(usagePageStyles).toMatch(/\.usageFilterBar\s*\{[\s\S]*?flex:\s*1 1 auto;/)
@@ -513,8 +467,5 @@ describe('UsagePage toolbar styles', () => {
     expect(usagePageStyles).toMatch(/:global\(\.input\)\s*\{[^}]*border-radius:\s*999px;/)
     expect(requestEventsSource).toContain('styles.usagePillControl')
     expect(requestEventsSource).toContain('styles.usagePillAction')
-    expect(priceSettingsSource).toContain('styles.usagePillControl')
-    expect(priceSettingsSource).toContain('styles.usagePillAction')
-    expect(priceSettingsSource).toContain('styles.usagePillActionDanger')
   })
 })

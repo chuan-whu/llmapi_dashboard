@@ -13,4 +13,4 @@ verify-frontend:
 	npm --prefix ./web run build
 
 verify-docker:
-	docker build -t cpa-usage-keeper:ci .
+	docker build -t llmapi-dashboard:ci .

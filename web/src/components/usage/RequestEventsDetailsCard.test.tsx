@@ -219,7 +219,7 @@ describe('RequestEventsDetailsCard pagination', () => {
     const html = renderCard({
       events: [{
         ...events[0],
-        api_key: 'sk-live-secret-value-1234567890',
+        api_key: 'sk-fake-key-123456',
         source: 'OpenAI Primary',
         source_raw: 'source-a',
       }],
@@ -231,7 +231,7 @@ describe('RequestEventsDetailsCard pagination', () => {
       }],
     });
 
-    expect(html).toMatch(/sk-l\*+7890/);
+    expect(html).toMatch(/sk-f\*+3456/);
     expect(html).toContain('AI account 1');
     expect(html).not.toContain('sk-live-secret-value-1234567890');
     expect(html).not.toContain('OpenAI Primary');

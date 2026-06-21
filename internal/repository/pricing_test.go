@@ -1,14 +1,14 @@
 package repository
 
 import (
-	"cpa-usage-keeper/internal/repository/dto"
+	"llmapi-dashboard/internal/repository/dto"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/config"
-	"cpa-usage-keeper/internal/entities"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/config"
+	"llmapi-dashboard/internal/entities"
 )
 
 func TestListUsedModelsReturnsDistinctSortedModels(t *testing.T) {

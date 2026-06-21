@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
 
-	servicedto "cpa-usage-keeper/internal/service/dto"
+	servicedto "llmapi-dashboard/internal/service/dto"
 )
+
+var ErrInvalidID = errors.New("invalid id")
 
 type UsageProvider interface {
 	GetUsageOverview(context.Context, servicedto.UsageFilter) (*servicedto.UsageOverviewSnapshot, error)

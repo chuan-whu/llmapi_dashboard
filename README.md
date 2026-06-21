@@ -1,37 +1,32 @@
-# CPA Usage Keeper
+# llmapi_dashboard
+
+> This project is modified from [Willxup/cpa-usage-keeper](https://github.com/Willxup/cpa-usage-keeper).
 
 [中文说明](./README.zh.md)
 
-CPA Usage Keeper is now a read-only dashboard for an existing Keeper SQLite database.
+`llmapi_dashboard` is a read-only dashboard for an existing SQLite `app.db`. It shows LLM API usage overview, analysis charts, request events, credential statistics, model information, and balance query results.
 
-Give the application a path to an existing `app.db`, and it serves the usage overview, analysis, and request event dashboard from that database. It does not connect to CPA, pull Redis usage data, sync metadata, refresh quota, write backups, or mutate the database.
-
-<p float="left">
-  <img src="https://images.bitskyline.com/i/2026/05/govoah.png" width="49%" />
-  <img src="https://images.bitskyline.com/i/2026/05/fu4lec.png" width="49%" />
-</p>
-<p float="left">
-  <img src="https://images.bitskyline.com/i/2026/05/fu43px.png" width="49%" />
-  <img src="https://images.bitskyline.com/i/2026/05/fu4gh3.png" width="49%" />
-</p>
+The application opens the database read-only and runs configured read-only query commands.
 
 ## Features
 
-- Read-only access to an existing CPA Usage Keeper `app.db`
-- Dashboard for request volume, tokens, cost, cache hit rate, success rate, and latency
-- Time range and API key filters
-- Analysis page for token trends, API key composition, model composition, and heatmaps
-- Request event log with model, source, result, pagination, and time range filters
-- Optional deployment under a reverse-proxy subpath with `APP_BASE_PATH`
+- Usage overview for requests, success/failure count, tokens, RPM/TPM, cost, and service health.
+- Analysis view for token trends, API key composition, cost composition, model composition, credential composition, and heatmaps.
+- Request event log with time range, API key, model, source, result filters, and pagination.
+- Credential dashboard for account metadata and usage statistics.
+- Model page for available models and database pricing.
+- OhMyGPT API key lookup form configured by `OHMYGPT_QUERY_URL` and `OHMYGPT_QUERY_TOKEN`.
+- Header balance display for daily refresh balance and pay-as-you-go balance.
+- Deployment support for login protection, reverse-proxy subpaths, local Docker builds, Linux binaries, and systemd.
 
 ## Quick Start
-
-Create a `.env` file and point `APP_DB_PATH` at your existing database:
 
 ```bash
 cp .env.example .env
 vim .env
 ```
+
+Minimum config:
 
 ```env
 APP_DB_PATH=/absolute/path/to/app.db
@@ -42,236 +37,128 @@ LOGIN_PASSWORD=replace-with-your-login-password
 AUTH_SESSION_TTL=168h
 ```
 
-Start the service:
+Run:
 
 ```bash
-./cpa-usage-keeper
+./llmapi-dashboard
 ```
 
-Open `http://127.0.0.1:8080`.
+Open:
 
-## Deployment
-
-### Docker Compose
-
-`docker-compose.example.yml` is a read-only dashboard template:
-
-```yaml
-services:
-  cpa-usage-keeper:
-    image: ghcr.io/willxup/cpa-usage-keeper:latest
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      APP_DB_PATH: /data/app.db
-      APP_PORT: 8080
-      APP_BASE_PATH: ""
-      AUTH_ENABLED: "false"
-      LOGIN_PASSWORD: replace-with-your-login-password
-      AUTH_SESSION_TTL: 168h
-    volumes:
-      - ./data/app.db:/data/app.db:ro
+```text
+http://127.0.0.1:8080
 ```
 
-Start:
+## Docker
+
+Build the local image from this repository:
 
 ```bash
-docker compose up -d
+docker build -t llmapi-dashboard:local .
 ```
 
-Stop:
-
-```bash
-docker compose down
-```
-
-The mounted database file must be readable by the container user.
-
-### Docker
+Run:
 
 ```bash
 docker run -d \
-  --name cpa-usage-keeper \
+  --name llmapi-dashboard \
   -p 8080:8080 \
   -e APP_DB_PATH=/data/app.db \
   -e APP_PORT=8080 \
   -e AUTH_ENABLED=false \
   -v "$(pwd)/data/app.db:/data/app.db:ro" \
-  ghcr.io/willxup/cpa-usage-keeper:latest
+  llmapi-dashboard:local
 ```
 
-### Linux Binary
-
-#### Download
-
-Download the Linux binary package for your architecture from [Releases](https://github.com/Willxup/cpa-usage-keeper/releases/latest), or use the command line:
-
-```bash
-curl -L -o cpa-usage-keeper.tar.gz "<replace-with-linux-binary-download-url>"
-mkdir -p cpa-usage-keeper
-tar -xzf cpa-usage-keeper.tar.gz -C cpa-usage-keeper --strip-components=1
-cd cpa-usage-keeper
-```
-
-Copy the `linux_amd64` or `linux_arm64` package URL from Releases, then replace the placeholder in the command above.
-
-#### Configure And Run
+## Linux And systemd
 
 ```bash
 cp .env.example .env
 vim .env
-./cpa-usage-keeper
+./llmapi-dashboard
 ```
 
-#### Run With systemd
-
-The Linux binary package includes `cpa-usage-keeper.service`, which can be registered directly as a `systemd` service. After it starts, systemd keeps the process running after SSH or terminal sessions close.
-
-`systemd` requires an absolute `WorkingDirectory`. The `sed` command below writes the current directory into the service file automatically:
-
 ```bash
-sudo cp cpa-usage-keeper.service /etc/systemd/system/cpa-usage-keeper.service
-sudo sed -i "s|__CPA_USAGE_KEEPER_DIR__|$(pwd)|g" /etc/systemd/system/cpa-usage-keeper.service
+sudo cp deploy/linux/llmapi-dashboard.service /etc/systemd/system/llmapi-dashboard.service
+sudo sed -i "s|__LLMAPI_DASHBOARD_DIR__|$(pwd)|g" /etc/systemd/system/llmapi-dashboard.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now cpa-usage-keeper
+sudo systemctl enable --now llmapi-dashboard
 ```
 
-Useful commands:
+## Build Ubuntu Artifacts
+
+Ubuntu 20.04:
 
 ```bash
-sudo systemctl status cpa-usage-keeper
-sudo journalctl -u cpa-usage-keeper -f
-sudo systemctl restart cpa-usage-keeper
+docker buildx build \
+  --file Dockerfile.ubuntu20.04 \
+  --target artifact \
+  --platform linux/amd64 \
+  --build-arg TARGETOS=linux \
+  --build-arg TARGETARCH=amd64 \
+  --output type=local,dest=build/ubuntu-20.04 \
+  .
+```
+
+Ubuntu 24.04:
+
+```bash
+docker buildx build \
+  --file Dockerfile.ubuntu24.04 \
+  --target artifact \
+  --platform linux/amd64 \
+  --build-arg TARGETOS=linux \
+  --build-arg TARGETARCH=amd64 \
+  --output type=local,dest=build/ubuntu-24.04 \
+  .
+```
+
+Output:
+
+```text
+llmapi-dashboard-linux-amd64
 ```
 
 ## Configuration
 
-Only the following application settings are used:
+See [.env.example](./.env.example) and [README.zh.md](./README.zh.md) for the full configuration reference.
 
-| Variable | Required | Default | Description |
-| --- | --- | --- | --- |
-| `APP_DB_PATH` | Yes | - | Path to an existing Keeper SQLite `app.db`; the application opens it read-only |
-| `APP_PORT` | No | `8080` | HTTP listen port |
-| `APP_BASE_PATH` | No | root path | Subpath prefix, such as `/keeper`; empty means `/` |
-| `AUTH_ENABLED` | No | `false` | Whether to enable login protection; recommended for public deployments |
-| `LOGIN_PASSWORD` | Yes when auth is enabled | - | Admin login password |
-| `AUTH_SESSION_TTL` | No | `168h` | Login session lifetime |
-| `TUTORIAL_PDF_PATH` | No | empty | Local PDF path for the top-bar usage guide link; served inline in the browser |
-| `AVAILABLE_MODELS_BASE_URL` | No | empty | OpenAI-compatible base URL used only to load the available model list |
-| `AVAILABLE_MODELS_API_KEY` | No | empty | API key used only to load the available model list |
-| `OHMYGPT_QUERY_URL` | No | empty | Oh My GPT quota query endpoint used by the Model & Query page |
-| `OHMYGPT_QUERY_TOKEN` | No | empty | Bearer token used by the Oh My GPT quota query endpoint |
-| `DAILY_QUOTA_QUERY_COMMAND` | No | empty | Command used for the top-bar balance display; stdout must contain `daily_refresh` and `pay_as_you_go` balance objects |
-| `DAILY_QUOTA_CACHE_TTL` | No | `10m` | In-memory cache duration for the balance command; invalid, zero, or negative values fall back to `10m` |
+OhMyGPT lookup uses:
 
-`APP_BASE_PATH` must be empty or start with `/`; for example `/keeper`. `/keeper/` is normalized to `/keeper`.
-Relative `TUTORIAL_PDF_PATH` values are resolved from the `.env` file directory.
-`AVAILABLE_MODELS_BASE_URL` may be an origin, `/v1`, or `/v1/models` URL; leave either available-models variable empty to show an empty model list.
+```env
+OHMYGPT_QUERY_URL=https://example.com/api/v1/user/admin/get-api-tokens
+OHMYGPT_QUERY_TOKEN=replace-with-private-query-token
+```
 
-Leave either `OHMYGPT_QUERY_URL` or `OHMYGPT_QUERY_TOKEN` empty to disable Oh My GPT quota lookup. The browser only posts the API key to this app; the configured bearer token is used server-side.
+The backend calls the configured URL with `POST` and `Authorization: Bearer ...`, then filters the returned list by the full API key entered in the model-info page.
 
-`DAILY_QUOTA_QUERY_COMMAND` runs server-side with shell semantics. Relative commands run from the `.env` file directory when a `.env` file is loaded. Copy `query_amount.example.py` to the ignored private file `query_amount.py`, replace the mock requests with your real balance endpoints, then set:
+## Header Balance Command
+
+Copy the ignored private script:
+
+```bash
+cp query_amount.example.py query_amount.py
+vim query_amount.py
+```
+
+Set:
 
 ```env
 DAILY_QUOTA_QUERY_COMMAND=uv run query_amount.py
+DAILY_QUOTA_CACHE_TTL=10m
 ```
 
-The command's stdout must contain exactly one JSON object:
-
-```json
-{
-  "status": "ok",
-  "daily_refresh": {
-    "status": "ok",
-    "remaining": 12.34
-  },
-  "pay_as_you_go": {
-    "status": "ok",
-    "remaining": 56.78
-  }
-}
-```
-
-Each balance status may be `ok`, `partial`, or `failed`; `ok` and `partial` require a numeric `remaining`. Results are rounded to two decimals and cached in memory for `DAILY_QUOTA_CACHE_TTL`; command errors, invalid JSON, missing balance objects, extra stdout text, or non-numeric balances show `Query failed` in the affected header balance boxes.
-
-## Nginx Reverse Proxy
-
-When serving under `/keeper`, set `APP_BASE_PATH=/keeper` and keep the prefix in your reverse proxy:
-
-```nginx
-location /keeper/ {
-    proxy_pass http://127.0.0.1:8080;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-}
-```
-
-## Project Structure
-
-```text
-cmd/server/              Application entrypoint
-internal/api/            HTTP routes and read-only dashboard handlers
-internal/app/            App wiring and startup
-internal/config/         Environment config loading
-internal/entities/       GORM data models
-internal/helper/         Shared backend helpers and browser-facing redaction
-internal/logging/        Logging setup
-internal/repository/     Read-only SQLite access and aggregations
-internal/service/        Usage and identity query services
-internal/timeutil/       Time helpers
-internal/version/        Build version metadata
-deploy/linux/            Linux systemd service file
-web/                     React + TypeScript frontend
-```
+The command must print exactly one JSON object with `daily_refresh` and `pay_as_you_go` objects. See [README.zh.md](./README.zh.md) for the full format.
 
 ## Development
 
-### Prerequisites
-
-- Go 1.22+
-- Node.js 22+
-- npm
-- An existing Keeper `app.db`
-
-### Run Locally
-
-1. Create a local config:
-
-```bash
-cp .env.example .env
-vim .env
-```
-
-2. Start the backend:
-
 ```bash
 go run ./cmd/server/main.go
-```
-
-3. In another terminal, install frontend dependencies and start the dev server:
-
-```bash
 npm --prefix ./web ci
 npm --prefix ./web run dev -- --host 127.0.0.1
 ```
 
-The frontend dev server proxies `/api` to `http://127.0.0.1:8080` by default. Open `http://127.0.0.1:5173` for local development. If the backend uses another port:
-
-```bash
-VITE_API_PROXY_TARGET=http://127.0.0.1:9090 npm --prefix ./web run dev -- --host 127.0.0.1
-```
-
-### Tests
-
-Run the full local verification baseline:
-
-```bash
-make verify
-```
-
-Or run checks individually:
+## Tests
 
 ```bash
 go test ./cmd/... ./internal/...
@@ -279,14 +166,11 @@ npm --prefix ./web run test
 npm --prefix ./web run lint
 npm --prefix ./web run typecheck
 npm --prefix ./web run build
+uv run --no-project query_amount.example.py
 ```
 
-## Star History
-
-<p>
-  <img src="https://api.star-history.com/chart?repos=willxup/cpa-usage-keeper&type=date&legend=top-left" />
-</p>
+Go database tests require CGO because SQLite uses `github.com/mattn/go-sqlite3`.
 
 ## License
 
-This project is open source under the [MIT License](./LICENSE).
+This project uses the [MIT License](./LICENSE).

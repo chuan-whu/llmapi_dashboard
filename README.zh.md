@@ -1,37 +1,42 @@
-# CPA Usage Keeper
+# llmapi_dashboard
+
+> 本项目基于 [Willxup/cpa-usage-keeper](https://github.com/Willxup/cpa-usage-keeper) 魔改。
 
 [English README](./README.md)
 
-`CPA Usage Keeper` 现在是一个只读看板，用于查看已有的 Keeper SQLite 数据库。
+`llmapi_dashboard` 是一个面向 LLM API 使用情况的只读数据看板。它读取已有的 SQLite `app.db`，展示用量、分析、请求事件、凭证统计、模型信息和余额查询结果。
 
-给应用提供一个现有 `app.db` 路径后，它会直接从该数据库读取用量概览、分析数据和请求事件。应用不会连接 CPA、不会拉取 Redis 用量队列、不会同步 metadata、不会刷新 quota、不会创建备份，也不会写入数据库。
+应用以只读方式打开数据库，并按配置执行少量只读查询。
 
-<p float="left">
-  <img src="https://images.bitskyline.com/i/2026/05/govoah.png" width="49%" />
-  <img src="https://images.bitskyline.com/i/2026/05/fu4lec.png" width="49%" />
-</p>
-<p float="left">
-  <img src="https://images.bitskyline.com/i/2026/05/fu43px.png" width="49%" />
-  <img src="https://images.bitskyline.com/i/2026/05/fu4gh3.png" width="49%" />
-</p>
+## 功能
 
-## 功能特性
+- 用量总览：请求量、成功/失败数、Token、缓存 Token、推理 Token、RPM/TPM、成本和服务健康。
+- 分析视图：Token 趋势、API Key 构成、成本构成、模型构成、凭证构成和热力图。
+- 请求事件：按时间范围、API Key、模型、来源、结果筛选并分页查看请求明细。
+- 凭证看板：查看凭证来源、请求统计、最后使用时间、启用状态和元数据。
+- 模型信息：读取可用模型列表，并展示数据库中的模型价格表。
+- 模型查询：通过 `OHMYGPT_QUERY_URL` 和 `OHMYGPT_QUERY_TOKEN` 查询 OhMyGPT API Key 额度与可用模型。
+- 顶部余额：通过本地命令显示“每日刷新余额”和“按量计费余额”。
+- 部署能力：支持登录保护、反向代理子路径、Docker 本地构建、Linux 二进制和 systemd。
 
-- 以只读方式打开现有 CPA Usage Keeper `app.db`
-- Dashboard 查看请求量、Token、成本、缓存命中率、成功率和延迟
-- 支持时间范围和 API Key 筛选
-- 分析页展示 Token 趋势、API Key 构成、模型构成和热力图
-- 请求事件日志支持模型、来源、结果、分页和时间范围筛选
-- 支持通过 `APP_BASE_PATH` 部署到反向代理子路径
+## 数据边界
+
+必须提供一个已有数据库：
+
+```env
+APP_DB_PATH=/absolute/path/to/app.db
+```
+
+当前应用只读打开该数据库。如果 `app.db` 缺少所需表，应用会启动失败或页面查询失败。
 
 ## 快速开始
-
-创建 `.env`，把 `APP_DB_PATH` 指向已有数据库：
 
 ```bash
 cp .env.example .env
 vim .env
 ```
+
+最小配置：
 
 ```env
 APP_DB_PATH=/absolute/path/to/app.db
@@ -42,139 +47,178 @@ LOGIN_PASSWORD=replace-with-your-login-password
 AUTH_SESSION_TTL=168h
 ```
 
-启动服务：
+运行：
 
 ```bash
-./cpa-usage-keeper
+./llmapi-dashboard
 ```
 
-打开 `http://127.0.0.1:8080`。
+访问：
 
-## 部署方式
-
-### Docker Compose
-
-`docker-compose.example.yml` 是只读看板模板：
-
-```yaml
-services:
-  cpa-usage-keeper:
-    image: ghcr.io/willxup/cpa-usage-keeper:latest
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      APP_DB_PATH: /data/app.db
-      APP_PORT: 8080
-      APP_BASE_PATH: ""
-      AUTH_ENABLED: "false"
-      LOGIN_PASSWORD: replace-with-your-login-password
-      AUTH_SESSION_TTL: 168h
-    volumes:
-      - ./data/app.db:/data/app.db:ro
+```text
+http://127.0.0.1:8080
 ```
 
-启动：
+如果通过子路径部署，例如 `/usage`：
+
+```env
+APP_BASE_PATH=/usage
+```
+
+## Docker 部署
+
+本项目需要从当前仓库本地构建镜像：
 
 ```bash
-docker compose up -d
+docker build -t llmapi-dashboard:local .
 ```
 
-停止：
+运行：
 
 ```bash
-docker compose down
+docker run -d \
+  --name llmapi-dashboard \
+  -p 8080:8080 \
+  -e APP_DB_PATH=/data/app.db \
+  -e APP_PORT=8080 \
+  -e APP_BASE_PATH= \
+  -e AUTH_ENABLED=false \
+  -v "$(pwd)/data/app.db:/data/app.db:ro" \
+  llmapi-dashboard:local
 ```
 
 挂载的数据库文件必须允许容器用户读取。
 
-### Docker
+## Linux 二进制与 systemd
 
-```bash
-docker run -d \
-  --name cpa-usage-keeper \
-  -p 8080:8080 \
-  -e APP_DB_PATH=/data/app.db \
-  -e APP_PORT=8080 \
-  -e AUTH_ENABLED=false \
-  -v "$(pwd)/data/app.db:/data/app.db:ro" \
-  ghcr.io/willxup/cpa-usage-keeper:latest
-```
-
-### Linux 二进制
-
-#### 下载
-
-在 [Releases](https://github.com/Willxup/cpa-usage-keeper/releases/latest) 下载对应架构的 Linux 二进制包，或使用命令行下载：
-
-```bash
-curl -L -o cpa-usage-keeper.tar.gz "<替换为 Linux 二进制包下载地址>"
-mkdir -p cpa-usage-keeper
-tar -xzf cpa-usage-keeper.tar.gz -C cpa-usage-keeper --strip-components=1
-cd cpa-usage-keeper
-```
-
-请在 Releases 页面复制 `linux_amd64` 或 `linux_arm64` 包的下载地址，并替换上面命令中的占位符。
-
-#### 配置和运行
+准备配置后直接运行：
 
 ```bash
 cp .env.example .env
 vim .env
-./cpa-usage-keeper
+./llmapi-dashboard
 ```
 
-#### systemd 常驻运行
-
-Linux 二进制包内置 `cpa-usage-keeper.service`，可直接注册为 `systemd` 服务。启动后进程由 systemd 托管，关闭 SSH 或终端不会结束进程。
-
-`systemd` 的 `WorkingDirectory` 需要绝对路径。下面的 `sed` 命令会把当前目录自动写入 service 文件：
+注册为 systemd 服务：
 
 ```bash
-sudo cp cpa-usage-keeper.service /etc/systemd/system/cpa-usage-keeper.service
-sudo sed -i "s|__CPA_USAGE_KEEPER_DIR__|$(pwd)|g" /etc/systemd/system/cpa-usage-keeper.service
+sudo cp deploy/linux/llmapi-dashboard.service /etc/systemd/system/llmapi-dashboard.service
+sudo sed -i "s|__LLMAPI_DASHBOARD_DIR__|$(pwd)|g" /etc/systemd/system/llmapi-dashboard.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now cpa-usage-keeper
+sudo systemctl enable --now llmapi-dashboard
 ```
 
 常用命令：
 
 ```bash
-sudo systemctl status cpa-usage-keeper
-sudo journalctl -u cpa-usage-keeper -f
-sudo systemctl restart cpa-usage-keeper
+sudo systemctl status llmapi-dashboard
+sudo journalctl -u llmapi-dashboard -f
+sudo systemctl restart llmapi-dashboard
+```
+
+## 构建 Ubuntu 产物
+
+仓库提供两个 Dockerfile：
+
+- `Dockerfile.ubuntu20.04`
+- `Dockerfile.ubuntu24.04`
+
+构建 Ubuntu 20.04 amd64 二进制：
+
+```bash
+docker buildx build \
+  --file Dockerfile.ubuntu20.04 \
+  --target artifact \
+  --platform linux/amd64 \
+  --build-arg TARGETOS=linux \
+  --build-arg TARGETARCH=amd64 \
+  --output type=local,dest=build/ubuntu-20.04 \
+  .
+```
+
+构建 Ubuntu 24.04 amd64 二进制：
+
+```bash
+docker buildx build \
+  --file Dockerfile.ubuntu24.04 \
+  --target artifact \
+  --platform linux/amd64 \
+  --build-arg TARGETOS=linux \
+  --build-arg TARGETARCH=amd64 \
+  --output type=local,dest=build/ubuntu-24.04 \
+  .
+```
+
+输出文件名：
+
+```text
+llmapi-dashboard-linux-amd64
 ```
 
 ## 配置
 
-应用只使用以下配置：
-
 | 变量 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `APP_DB_PATH` | 是 | - | 现有 Keeper SQLite `app.db` 路径；应用会以只读方式打开 |
+| `APP_DB_PATH` | 是 | - | 已有 SQLite `app.db` 路径，应用只读打开 |
 | `APP_PORT` | 否 | `8080` | HTTP 监听端口 |
-| `APP_BASE_PATH` | 否 | 根路径 | 子路径部署前缀，例如 `/keeper`；留空表示部署在 `/` |
-| `AUTH_ENABLED` | 否 | `false` | 是否启用登录保护；公网部署建议设为 `true` |
-| `LOGIN_PASSWORD` | 启用登录保护时是 | - | 管理员登录密码 |
+| `APP_BASE_PATH` | 否 | 根路径 | 子路径部署前缀，例如 `/usage` |
+| `AUTH_ENABLED` | 否 | `false` | 是否启用登录保护，公网部署建议开启 |
+| `LOGIN_PASSWORD` | 启用登录保护时是 | - | 登录密码 |
 | `AUTH_SESSION_TTL` | 否 | `168h` | 登录 session 有效时长 |
-| `TUTORIAL_PDF_PATH` | 否 | 空 | 顶部使用教程链接对应的本地 PDF 路径；浏览器内联阅读 |
-| `AVAILABLE_MODELS_BASE_URL` | 否 | 空 | 仅用于加载可用模型列表的 OpenAI 兼容接口地址 |
-| `AVAILABLE_MODELS_API_KEY` | 否 | 空 | 仅用于加载可用模型列表的 API key |
-| `OHMYGPT_QUERY_URL` | 否 | 空 | “模型与查询”页使用的 Oh My GPT 额度查询接口 |
-| `OHMYGPT_QUERY_TOKEN` | 否 | 空 | Oh My GPT 额度查询接口使用的 Bearer token |
-| `DAILY_QUOTA_QUERY_COMMAND` | 否 | 空 | 顶部余额显示使用的服务端命令；stdout 必须包含 `daily_refresh` 和 `pay_as_you_go` 两个余额对象 |
-| `DAILY_QUOTA_CACHE_TTL` | 否 | `10m` | 顶部余额查询命令的内存缓存时间；非法、为 0 或负数时默认 `10m` |
+| `TUTORIAL_PDF_PATH` | 否 | 空 | 顶部教程 PDF 路径，留空则隐藏 |
+| `AVAILABLE_MODELS_BASE_URL` | 否 | 空 | OpenAI 兼容模型接口地址，可为域名、`/v1` 或 `/v1/models` |
+| `AVAILABLE_MODELS_API_KEY` | 否 | 空 | 查询可用模型列表使用的 API Key |
+| `OHMYGPT_QUERY_URL` | 否 | 空 | 模型与查询页底部 OhMyGPT 查询框调用的后端接口 |
+| `OHMYGPT_QUERY_TOKEN` | 否 | 空 | 调用 `OHMYGPT_QUERY_URL` 使用的 Bearer token |
+| `DAILY_QUOTA_QUERY_COMMAND` | 否 | 空 | 顶部余额查询命令，stdout 必须是指定 JSON |
+| `DAILY_QUOTA_CACHE_TTL` | 否 | `10m` | 顶部余额查询结果缓存时间 |
 
-`APP_BASE_PATH` 必须为空或以 `/` 开头；例如 `/keeper`，`/keeper/` 会规范为 `/keeper`。
-相对形式的 `TUTORIAL_PDF_PATH` 会按 `.env` 所在目录解析。
-`AVAILABLE_MODELS_BASE_URL` 可以是接口域名、`/v1` 或 `/v1/models` 地址；任一可用模型变量留空时，可用模型列表显示为空。
+说明：
 
-`OHMYGPT_QUERY_URL` 或 `OHMYGPT_QUERY_TOKEN` 任一留空时会禁用 Oh My GPT 额度查询。浏览器只会把待查询 API Key 发给本应用，配置的 Bearer token 只在服务端使用。
+- `APP_BASE_PATH` 必须为空或以 `/` 开头，`/usage/` 会规范为 `/usage`。
+- 相对路径的 `APP_DB_PATH`、`TUTORIAL_PDF_PATH` 会按 `.env` 所在目录解析。
+- `AVAILABLE_MODELS_BASE_URL` 或 `AVAILABLE_MODELS_API_KEY` 任一为空时，可用模型列表为空。
+- `OHMYGPT_QUERY_URL` 或 `OHMYGPT_QUERY_TOKEN` 任一为空时，模型与查询页底部查询框会返回配置缺失错误。
+- OhMyGPT 查询框会把页面输入的完整 API Key 传给后端，后端调用 `OHMYGPT_QUERY_URL` 后只保留完整 key 匹配的记录，不按后三位匹配。
 
-`DAILY_QUOTA_QUERY_COMMAND` 会在服务端按 shell 语义执行。加载 `.env` 文件时，相对命令会以 `.env` 所在目录作为工作目录。先把 `query_amount.example.py` 复制成已忽略的私有文件 `query_amount.py`，再把示例请求替换成你的真实余额接口，然后配置：
+## OhMyGPT 查询框
+
+配置：
+
+```env
+OHMYGPT_QUERY_URL=https://example.com/api/v1/user/admin/get-api-tokens
+OHMYGPT_QUERY_TOKEN=replace-with-private-query-token
+```
+
+页面路径：
+
+```text
+模型与查询 -> Oh My GPT额度与可用模型查询
+```
+
+后端请求行为：
+
+- dashboard 后端向 `OHMYGPT_QUERY_URL` 发起 `POST` 请求。
+- 请求头包含 `Authorization: Bearer ${OHMYGPT_QUERY_TOKEN}`。
+- 页面输入的 API Key 不会发给 OhMyGPT 接口，而是在后端拿到返回列表后做完整 key 过滤。
+- 查询结果会在页面展示剩余额度、剩余额度比例、已用额度、总额度、调用次数、有效期和可用模型。
+
+## 顶部余额查询
+
+推荐做法：
+
+```bash
+cp query_amount.example.py query_amount.py
+vim query_amount.py
+```
+
+`query_amount.py` 已被 `.gitignore` 忽略，真实密钥、私有接口、代理配置只放在这个文件里。
+
+配置命令：
 
 ```env
 DAILY_QUOTA_QUERY_COMMAND=uv run query_amount.py
+DAILY_QUOTA_CACHE_TTL=10m
 ```
 
 命令 stdout 必须只包含一个 JSON 对象：
@@ -193,14 +237,35 @@ DAILY_QUOTA_QUERY_COMMAND=uv run query_amount.py
 }
 ```
 
-每个余额状态可以是 `ok`、`partial` 或 `failed`；`ok` 和 `partial` 必须提供数字形式的 `remaining`。结果会保留两位小数，并按 `DAILY_QUOTA_CACHE_TTL` 缓存在内存中；命令错误、JSON 非法、缺少余额对象、stdout 混入额外文本或余额非数字时，对应顶部余额框显示“查询失败”。
+规则：
 
-## Nginx 反代
+- 顶层 `status` 允许 `ok`、`partial`、`failed`。
+- `daily_refresh` 和 `pay_as_you_go` 必须存在。
+- 子对象 `status` 允许 `ok`、`partial`、`failed`。
+- 子对象为 `ok` 或 `partial` 时，`remaining` 必须是数字。
+- stdout 不能混入日志、warning 或多个 JSON 对象。
+- 负数余额会按脚本逻辑归零。
+- 后端展示时保留两位小数。
 
-部署到 `/keeper` 时设置 `APP_BASE_PATH=/keeper`，并在反向代理中保留该前缀：
+排查要点：
+
+- 后端命令默认超时为 30 秒。
+- 失败结果也会按 `DAILY_QUOTA_CACHE_TTL` 缓存。
+- systemd/Docker 下的 `PATH`、`HOME`、工作目录可能和 SSH 手动执行不同。
+- 开启登录保护后，直接 curl `/api/v1/daily-quota` 会返回认证错误，需要带登录 cookie 或临时关闭认证排查。
+
+## Nginx 反向代理
+
+部署到 `/usage`：
+
+```env
+APP_BASE_PATH=/usage
+```
+
+Nginx 示例：
 
 ```nginx
-location /keeper/ {
+location /usage/ {
     proxy_pass http://127.0.0.1:8080;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -208,70 +273,36 @@ location /keeper/ {
 }
 ```
 
-## 项目结构
-
-```text
-cmd/server/              应用入口
-internal/api/            HTTP 路由与只读看板处理器
-internal/app/            应用装配与启动
-internal/config/         环境配置加载
-internal/entities/       GORM 数据模型
-internal/helper/         后端通用辅助方法与前端展示字段脱敏
-internal/logging/        日志初始化
-internal/repository/     只读 SQLite 访问与聚合查询
-internal/service/        usage 与身份数据查询服务
-internal/timeutil/       时间工具
-internal/version/        构建版本信息
-deploy/linux/            Linux systemd 服务文件
-web/                     React + TypeScript 前端
-```
-
 ## 本地开发
 
-### 前置依赖
+前置依赖：
 
 - Go 1.22+
 - Node.js 22+
 - npm
-- 现有 Keeper `app.db`
+- uv
+- 已有 `app.db`
 
-### 本地启动
-
-1. 创建本地配置：
-
-```bash
-cp .env.example .env
-vim .env
-```
-
-2. 启动后端：
+启动后端：
 
 ```bash
 go run ./cmd/server/main.go
 ```
 
-3. 在另一个终端安装前端依赖并启动开发服务器：
+启动前端开发服务器：
 
 ```bash
 npm --prefix ./web ci
 npm --prefix ./web run dev -- --host 127.0.0.1
 ```
 
-前端开发服务器默认把 `/api` 代理到 `http://127.0.0.1:8080`，访问 `http://127.0.0.1:5173` 即可联调。如果后端使用了其他端口：
+默认代理到 `http://127.0.0.1:8080`。如果后端端口不同：
 
 ```bash
 VITE_API_PROXY_TARGET=http://127.0.0.1:9090 npm --prefix ./web run dev -- --host 127.0.0.1
 ```
 
-### 测试
-
-运行完整的本地验证基线：
-
-```bash
-make verify
-```
-
-也可以单独运行各项检查：
+## 测试
 
 ```bash
 go test ./cmd/... ./internal/...
@@ -279,14 +310,36 @@ npm --prefix ./web run test
 npm --prefix ./web run lint
 npm --prefix ./web run typecheck
 npm --prefix ./web run build
+uv run --no-project query_amount.example.py
 ```
 
-## Star History
+SQLite 使用 `github.com/mattn/go-sqlite3`，运行 Go 数据库测试需要启用 CGO 并安装可用 C 编译器。
 
-<p>
-  <img src="https://api.star-history.com/chart?repos=willxup/cpa-usage-keeper&type=date&legend=top-left" />
-</p>
+## 项目结构
+
+```text
+cmd/server/              后端入口
+internal/api/            HTTP 路由
+internal/app/            应用装配
+internal/config/         环境配置
+internal/entities/       数据模型
+internal/helper/         后端辅助函数
+internal/logging/        日志配置
+internal/repository/     SQLite 查询与聚合
+internal/service/        业务查询服务
+internal/timeutil/       时间处理
+internal/version/        构建版本
+deploy/linux/            systemd 服务文件
+web/                     React + TypeScript 前端
+query_amount.example.py  顶部余额查询示例脚本
+```
+
+## 安全注意
+
+- 不要提交 `.env`、`query_amount.py`、数据库文件或构建产物。
+- 真实 API Key、Bearer token、代理地址只放在部署环境或 ignored 私有文件中。
+- 公网部署建议启用 `AUTH_ENABLED=true` 并设置强密码。
 
 ## License
 
-本项目基于 [MIT License](./LICENSE) 开源。
+本项目使用 [MIT License](./LICENSE)。

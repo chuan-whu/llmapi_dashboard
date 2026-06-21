@@ -1,6 +1,6 @@
 package helper
 
-import "cpa-usage-keeper/internal/entities"
+import "llmapi-dashboard/internal/entities"
 
 // UsageTokenCostInput 是价格计算的最小 token 输入，避免 repository 为事件和聚合行各维护一套公式。
 type UsageTokenCostInput struct {

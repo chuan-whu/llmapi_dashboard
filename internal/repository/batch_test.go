@@ -3,7 +3,7 @@ package repository
 import (
 	"testing"
 
-	"cpa-usage-keeper/internal/entities"
+	"llmapi-dashboard/internal/entities"
 )
 
 func TestInsertBatchSizeUsesModelColumnCount(t *testing.T) {

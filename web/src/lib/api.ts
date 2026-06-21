@@ -1,4 +1,4 @@
-import { type AnalysisResponse, type AuthSessionResponse, type AvailableModelsResponse, type CpaApiKeyOptionsResponse, type CpaApiKeySettingsItem, type CpaApiKeysResponse, type DailyQuotaResponse, type KeyOverviewTimeRange, type ModelInfoQueryResponse, type PricingEntry, type PricingResponse, type StatusResponse, type UpdateCheckResponse, type UsageEventModelFilterOptionsResponse, type UsageEventSourceFilterOptionsResponse, type UsedModelsResponse, type UsageIdentitiesPageResponse, type UsageIdentitiesResponse, type UsageEventsResponse, type UsageIdentityAuthType, type UsageOverviewResponse, type UsageQuotaCacheResponse, type UsageQuotaRefreshResponse, type UsageQuotaRefreshTaskResponse } from './types'
+import { type AnalysisResponse, type ApiKeyOptionsResponse, type AuthSessionResponse, type AvailableModelsResponse, type DailyQuotaResponse, type ModelInfoQueryResponse, type PricingResponse, type StatusResponse, type UsageEventModelFilterOptionsResponse, type UsageEventSourceFilterOptionsResponse, type UsageIdentitiesPageResponse, type UsageIdentitiesResponse, type UsageEventsResponse, type UsageIdentityAuthType, type UsageOverviewResponse } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -86,19 +86,6 @@ export async function login(password: string): Promise<void> {
   }
 }
 
-export async function loginWithCPAAPIKey(apiKey: string): Promise<void> {
-  const response = await apiFetch(apiPath('/auth/api-key-login'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ apiKey }),
-  })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to login with CPA API key: ${response.status}`)
-  }
-}
-
 export async function logout(): Promise<void> {
   const response = await apiFetch(apiPath('/auth/logout'), {
     method: 'POST',
@@ -106,16 +93,6 @@ export async function logout(): Promise<void> {
   if (!response.ok) {
     await parseApiError(response, `Failed to logout: ${response.status}`)
   }
-}
-
-export async function fetchKeyOverview(range: KeyOverviewTimeRange, signal?: AbortSignal): Promise<UsageOverviewResponse> {
-  const params = new URLSearchParams()
-  params.set('range', range)
-  const response = await apiFetch(`${apiPath('/key-overview')}?${params.toString()}`, { signal })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to load key overview: ${response.status}`)
-  }
-  return response.json()
 }
 
 export async function fetchUsageOverview(range: string, start?: string, end?: string, signal?: AbortSignal, apiKeyId?: string): Promise<UsageOverviewResponse> {
@@ -253,46 +230,6 @@ export async function fetchUsageIdentitiesPage(signal?: AbortSignal, options?: F
   return response.json()
 }
 
-export async function fetchUsageQuotaCache(authIndexes: string[], signal?: AbortSignal): Promise<UsageQuotaCacheResponse> {
-  // cache 只读后端已有结果，不携带刷新 limit，避免把缓存读取误当队列提交。
-  const response = await apiFetch(apiPath('/quota/cache'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ auth_indexes: authIndexes }),
-    signal,
-  })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to load cached usage quotas: ${response.status}`)
-  }
-  return response.json()
-}
-
-export async function refreshUsageQuotas(authIndexes: string[], signal?: AbortSignal): Promise<UsageQuotaRefreshResponse> {
-  // refresh 会创建后台任务，前端提交当前页所有 auth_index。
-  const response = await apiFetch(apiPath('/quota/refresh'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ auth_indexes: authIndexes }),
-    signal,
-  })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to refresh usage quotas: ${response.status}`)
-  }
-  return response.json()
-}
-
-export async function fetchUsageQuotaRefreshTask(authIndex: string, signal?: AbortSignal): Promise<UsageQuotaRefreshTaskResponse> {
-  const response = await apiFetch(apiPath(`/quota/refresh/${encodeURIComponent(authIndex)}`), { signal })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to load usage quota refresh task: ${response.status}`)
-  }
-  return response.json()
-}
-
 export async function fetchAnalysis(range: string, start?: string, end?: string, signal?: AbortSignal, apiKeyId?: string): Promise<AnalysisResponse> {
   const params = new URLSearchParams()
   params.set('range', range)
@@ -315,40 +252,10 @@ export async function fetchAnalysis(range: string, start?: string, end?: string,
 }
 
 
-export async function fetchCpaApiKeyOptions(signal?: AbortSignal): Promise<CpaApiKeyOptionsResponse> {
+export async function fetchApiKeyOptions(signal?: AbortSignal): Promise<ApiKeyOptionsResponse> {
   const response = await apiFetch(apiPath('/usage/api-keys/options'), { signal, cache: 'no-store' })
   if (!response.ok) {
-    await parseApiError(response, `Failed to load CPA API key options: ${response.status}`)
-  }
-  return response.json()
-}
-
-export async function fetchCpaApiKeys(signal?: AbortSignal): Promise<CpaApiKeysResponse> {
-  const response = await apiFetch(apiPath('/usage/api-keys'), { signal, cache: 'no-store' })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to load CPA API keys: ${response.status}`)
-  }
-  return response.json()
-}
-
-export async function updateCpaApiKeyAlias(id: string, keyAlias: string): Promise<CpaApiKeySettingsItem> {
-  const response = await apiFetch(apiPath(`/usage/api-keys/${encodeURIComponent(id)}`), {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ keyAlias }),
-  })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to update CPA API key alias: ${response.status}`)
-  }
-  return response.json()
-}
-
-export async function fetchUsedModels(signal?: AbortSignal): Promise<UsedModelsResponse> {
-  const response = await apiFetch(apiPath('/models/used'), { signal })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to load used models: ${response.status}`)
+    await parseApiError(response, `Failed to load API key options: ${response.status}`)
   }
   return response.json()
 }
@@ -393,49 +300,10 @@ export async function fetchStatus(signal?: AbortSignal): Promise<StatusResponse>
   return response.json()
 }
 
-export async function markStatusActive(signal?: AbortSignal): Promise<void> {
-  const response = await apiFetch(apiPath('/status/active'), { signal })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to mark backend page activity: ${response.status}`)
-  }
-}
-
-export async function fetchUpdateCheck(signal?: AbortSignal): Promise<UpdateCheckResponse> {
-  const response = await apiFetch(apiPath('/update/check'), { signal })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to check for updates: ${response.status}`)
-  }
-  return response.json()
-}
-
 export async function fetchPricing(signal?: AbortSignal): Promise<PricingResponse> {
   const response = await apiFetch(apiPath('/pricing'), { signal })
   if (!response.ok) {
     await parseApiError(response, `Failed to load pricing: ${response.status}`)
   }
   return response.json()
-}
-
-export async function updatePricing(model: string, pricing: Omit<PricingEntry, 'model'>): Promise<PricingEntry> {
-  const response = await apiFetch(apiPath('/pricing'), {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ model, ...pricing }),
-  })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to update pricing: ${response.status}`)
-  }
-  return response.json()
-}
-
-export async function deletePricing(model: string): Promise<void> {
-  const params = new URLSearchParams({ model })
-  const response = await apiFetch(`${apiPath('/pricing')}?${params.toString()}`, {
-    method: 'DELETE',
-  })
-  if (!response.ok) {
-    await parseApiError(response, `Failed to delete pricing: ${response.status}`)
-  }
 }

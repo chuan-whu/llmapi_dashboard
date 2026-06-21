@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/config"
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/repository"
-	"cpa-usage-keeper/internal/repository/dto"
-	servicedto "cpa-usage-keeper/internal/service/dto"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/config"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/repository"
+	"llmapi-dashboard/internal/repository/dto"
+	servicedto "llmapi-dashboard/internal/service/dto"
 )
 
 func TestUsageServiceGetUsageOverviewDelegatesToFilteredOverview(t *testing.T) {
@@ -76,12 +76,15 @@ func TestUsageServiceResolvesAPIKeyIDForUsageQueries(t *testing.T) {
 		t.Fatalf("OpenDatabase returned error: %v", err)
 	}
 	closeTestDatabase(t, db)
-	if err := repository.SyncCPAAPIKeys(db, []string{"sk-target-key", "sk-other-key"}, time.Date(2026, 5, 13, 12, 0, 0, 0, time.UTC)); err != nil {
-		t.Fatalf("SyncCPAAPIKeys returned error: %v", err)
+	if err := db.Create(&[]entities.APIKey{
+		{APIKey: "sk-target-key", DisplayKey: "sk-*********target"},
+		{APIKey: "sk-other-key", DisplayKey: "sk-*********other"},
+	}).Error; err != nil {
+		t.Fatalf("seed API keys: %v", err)
 	}
-	activeKeys, err := repository.ListActiveCPAAPIKeys(db)
+	activeKeys, err := repository.ListActiveAPIKeys(db)
 	if err != nil {
-		t.Fatalf("ListActiveCPAAPIKeys returned error: %v", err)
+		t.Fatalf("ListActiveAPIKeys returned error: %v", err)
 	}
 	var targetID string
 	for _, key := range activeKeys {
@@ -150,17 +153,17 @@ func TestUsageServiceRejectsDeletedAPIKeyID(t *testing.T) {
 		t.Fatalf("OpenDatabase returned error: %v", err)
 	}
 	closeTestDatabase(t, db)
-	if err := repository.SyncCPAAPIKeys(db, []string{"sk-deleted-key"}, time.Date(2026, 5, 13, 12, 0, 0, 0, time.UTC)); err != nil {
-		t.Fatalf("SyncCPAAPIKeys returned error: %v", err)
+	if err := db.Create(&entities.APIKey{APIKey: "sk-deleted-key", DisplayKey: "sk-*********deleted"}).Error; err != nil {
+		t.Fatalf("seed API key: %v", err)
 	}
-	activeKeys, err := repository.ListActiveCPAAPIKeys(db)
+	activeKeys, err := repository.ListActiveAPIKeys(db)
 	if err != nil {
-		t.Fatalf("ListActiveCPAAPIKeys returned error: %v", err)
+		t.Fatalf("ListActiveAPIKeys returned error: %v", err)
 	}
 	if len(activeKeys) != 1 {
 		t.Fatalf("expected one active key, got %+v", activeKeys)
 	}
-	if err := db.Model(&entities.CPAAPIKey{}).Where("id = ?", activeKeys[0].ID).Update("is_deleted", true).Error; err != nil {
+	if err := db.Model(&entities.APIKey{}).Where("id = ?", activeKeys[0].ID).Update("is_deleted", true).Error; err != nil {
 		t.Fatalf("mark api key deleted: %v", err)
 	}
 	provider := NewUsageService(db)
@@ -169,4 +172,18 @@ func TestUsageServiceRejectsDeletedAPIKeyID(t *testing.T) {
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("expected deleted key to return record not found, got %v", err)
 	}
+}
+
+func closeTestDatabase(t *testing.T, db *gorm.DB) {
+	t.Helper()
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("get sql database: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Fatalf("close database: %v", err)
+		}
+	})
 }

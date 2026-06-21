@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"cpa-usage-keeper/internal/service"
 	"github.com/gin-gonic/gin"
+	"llmapi-dashboard/internal/service"
 )
 
 func registerDailyQuotaRoute(router gin.IRoutes, provider service.DailyQuotaProvider) {

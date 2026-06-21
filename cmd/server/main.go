@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"cpa-usage-keeper/internal/app"
+	"llmapi-dashboard/internal/app"
 )
 
 func main() {

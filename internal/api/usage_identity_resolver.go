@@ -3,7 +3,7 @@ package api
 import (
 	"strings"
 
-	"cpa-usage-keeper/internal/entities"
+	"llmapi-dashboard/internal/entities"
 )
 
 type usageIdentityResolver struct {

@@ -27,10 +27,6 @@ func TestRepositoryQueriesAvoidKnownFullEntityReads(t *testing.T) {
 		"Select(\"timestamp\").Where(\"id > ?\", identity.LastAggregatedUsageEventID).Order(\"timestamp desc, id desc\").First(&lastEvent)",
 	)
 
-	assertFileContains(t, "redis_usage_inbox.go",
-		"Select(redisUsageInboxProcessingColumns).Where(\"status = ? OR status = ?\"",
-		"Select(redisUsageInboxProcessingColumns).Where(\"status = ?\"",
-	)
 	assertFileContains(t, "pricing.go",
 		"Select(\"ID\", \"Model\", \"PromptPricePer1M\", \"CompletionPricePer1M\", \"CachePricePer1M\", \"CreatedAt\", \"UpdatedAt\")",
 	)

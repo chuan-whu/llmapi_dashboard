@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"cpa-usage-keeper/internal/config"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"llmapi-dashboard/internal/config"
 )
 
-const logFilePrefix = "cpa-usage-keeper-"
+const logFilePrefix = "llmapi-dashboard-"
 
 type noopCloser struct{}
 
@@ -53,11 +53,7 @@ func resolveLogDir(cfg config.Config) string {
 	if logDir != "" {
 		return logDir
 	}
-	workDir := strings.TrimSpace(cfg.WorkDir)
-	if workDir == "" {
-		workDir = config.DefaultWorkDir
-	}
-	return filepath.Join(workDir, filepath.Base(config.DefaultLogDir))
+	return filepath.Join(config.DefaultWorkDir, "logs")
 }
 
 func Configure(cfg config.Config) (io.Closer, error) {
@@ -80,7 +76,7 @@ func Configure(cfg config.Config) (io.Closer, error) {
 	var closer io.Closer = noopCloser{}
 	if cfg.LogFileEnabled {
 		logDir := resolveLogDir(cfg)
-		dailyWriter, err := newDailyFileWriter(logDir, cfg.LogRetentionDays, time.Now)
+		dailyWriter, err := newDailyFileWriter(logDir, 7, time.Now)
 		if err != nil {
 			return nil, err
 		}

@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/service"
+	"github.com/gin-gonic/gin"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/service"
 )
 
 type usageIdentitiesStub struct {
@@ -41,6 +42,10 @@ func (s usageIdentitiesStub) ListActiveUsageIdentitiesPage(_ context.Context, re
 		return service.ListUsageIdentitiesResponse{Items: s.pagedActiveItems, Total: s.pagedActiveTotal, TypeCounts: s.pagedTypeCounts}, s.err
 	}
 	return service.ListUsageIdentitiesResponse{Items: s.items, Total: int64(len(s.items)), TypeCounts: s.pagedTypeCounts}, s.err
+}
+
+func newUsageIdentitiesTestRouter(provider service.UsageIdentityProvider) *gin.Engine {
+	return NewReadOnlyRouter(nil, nil, provider, nil, AuthConfig{}, nil, "")
 }
 
 func TestUsageIdentitiesRouteReturnsMetadataStatsAndActiveRows(t *testing.T) {
@@ -91,10 +96,10 @@ func TestUsageIdentitiesRouteReturnsMetadataStatsAndActiveRows(t *testing.T) {
 		CreatedAt:    createdAt,
 		UpdatedAt:    updatedAt,
 	}
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{
+	router := newUsageIdentitiesTestRouter(usageIdentitiesStub{
 		items:       []entities.UsageIdentity{activeIdentity, deletedIdentity},
 		activeItems: []entities.UsageIdentity{activeIdentity},
-	}})
+	})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/identities", nil)
 	resp := httptest.NewRecorder()
 
@@ -146,7 +151,7 @@ func TestUsageIdentitiesRouteReturnsPublishedMetadataFields(t *testing.T) {
 	accountID := "acct_123"
 	planType := "team"
 	baseURL := "https://api.openai.com/v1"
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{items: []entities.UsageIdentity{{
+	router := newUsageIdentitiesTestRouter(usageIdentitiesStub{items: []entities.UsageIdentity{{
 		ID:           1,
 		Name:         "Codex Account",
 		AuthType:     entities.UsageIdentityAuthTypeAuthFile,
@@ -163,7 +168,7 @@ func TestUsageIdentitiesRouteReturnsPublishedMetadataFields(t *testing.T) {
 		ActiveStart:  &activeStart,
 		ActiveUntil:  &activeUntil,
 		PlanType:     &planType,
-	}}}})
+	}}})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/identities", nil)
 	resp := httptest.NewRecorder()
 
@@ -198,7 +203,7 @@ func TestUsageIdentitiesRouteReturnsPublishedMetadataFields(t *testing.T) {
 
 func TestUsageIdentitiesPageRouteFiltersByAuthTypeAndPaginates(t *testing.T) {
 	captured := service.ListUsageIdentitiesRequest{}
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{
+	router := newUsageIdentitiesTestRouter(usageIdentitiesStub{
 		pagedActiveReq:   &captured,
 		pagedActiveTotal: 25,
 		pagedActiveItems: []entities.UsageIdentity{{
@@ -210,7 +215,7 @@ func TestUsageIdentitiesPageRouteFiltersByAuthTypeAndPaginates(t *testing.T) {
 			Type:         "codex",
 			Provider:     "Codex",
 		}},
-	}})
+	})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/identities/page?auth_type=1&page=2&page_size=10&active_only=true&sort=priority", nil)
 	resp := httptest.NewRecorder()
 
@@ -232,7 +237,7 @@ func TestUsageIdentitiesPageRouteFiltersByAuthTypeAndPaginates(t *testing.T) {
 
 func TestUsageIdentitiesPageRouteAcceptsRepeatedTypesAndReturnsTypeCounts(t *testing.T) {
 	captured := service.ListUsageIdentitiesRequest{}
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{
+	router := newUsageIdentitiesTestRouter(usageIdentitiesStub{
 		pagedActiveReq:   &captured,
 		pagedActiveTotal: 3,
 		pagedTypeCounts: []service.UsageIdentityTypeCount{
@@ -249,7 +254,7 @@ func TestUsageIdentitiesPageRouteAcceptsRepeatedTypesAndReturnsTypeCounts(t *tes
 			Type:         "claude",
 			Provider:     "Claude Team",
 		}},
-	}})
+	})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/identities/page?auth_type=2&type=claude&type=%20openai%20&type=&page=1&page_size=10", nil)
 	resp := httptest.NewRecorder()
 
@@ -270,7 +275,7 @@ func TestUsageIdentitiesPageRouteAcceptsRepeatedTypesAndReturnsTypeCounts(t *tes
 }
 
 func TestUsageIdentitiesRouteReturnsAnonymizedProviderDisplayName(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{items: []entities.UsageIdentity{{
+	router := newUsageIdentitiesTestRouter(usageIdentitiesStub{items: []entities.UsageIdentity{{
 		ID:           1,
 		Name:         "Provider Name",
 		Prefix:       "Team Prefix",
@@ -279,7 +284,7 @@ func TestUsageIdentitiesRouteReturnsAnonymizedProviderDisplayName(t *testing.T) 
 		Identity:     "provider-auth-index",
 		Type:         "openai",
 		Provider:     "OpenAI",
-	}}}})
+	}}})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/identities", nil)
 	resp := httptest.NewRecorder()
 
@@ -299,9 +304,9 @@ func TestUsageIdentitiesRouteReturnsAnonymizedProviderDisplayName(t *testing.T) 
 
 func TestUsageIdentitiesRouteAnonymizesAIProviderIdentity(t *testing.T) {
 	rawLookupKey := "sk-live-secret-value"
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{items: []entities.UsageIdentity{
+	router := newUsageIdentitiesTestRouter(usageIdentitiesStub{items: []entities.UsageIdentity{
 		{ID: 1, Name: "Provider Name", Prefix: "Team Prefix", AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "apikey", Identity: rawLookupKey, Type: "openai", Provider: "OpenAI"},
-	}}})
+	}})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/identities", nil)
 	resp := httptest.NewRecorder()
 
@@ -323,7 +328,7 @@ func TestUsageIdentitiesRouteAnonymizesAIProviderIdentity(t *testing.T) {
 }
 
 func TestUsageIdentityReplacesLegacyMetadataRoutes(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{}})
+	router := newUsageIdentitiesTestRouter(usageIdentitiesStub{})
 	for _, path := range []string{"/api/v1/auth-files", "/api/v1/provider-metadata"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		resp := httptest.NewRecorder()

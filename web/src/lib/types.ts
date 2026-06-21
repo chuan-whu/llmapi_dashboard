@@ -1,35 +1,13 @@
-export type AuthRole = 'admin' | 'api_key_viewer'
-
-export interface AuthSessionAPIKeySummary {
-  display_key: string
-  alias?: string
-}
+export type AuthRole = 'admin'
 
 export interface AuthSessionResponse {
   authenticated: boolean
   role?: AuthRole
-  api_key?: AuthSessionAPIKeySummary
 }
 
 export interface StatusResponse {
-  running: boolean
-  sync_running: boolean
   timezone: string
   version?: string
-  updateCheckEnabled?: boolean
-  cpa_public_url?: string
-  last_run_at?: string
-  last_error?: string
-  last_warning?: string
-  last_status?: string
-}
-
-export interface UpdateCheckResponse {
-  currentVersion: string
-  latestVersion: string
-  updateAvailable: boolean
-  canCompare: boolean
-  message: string
 }
 
 export interface UsageOverviewUsageSnapshot {
@@ -204,78 +182,6 @@ export interface UsageIdentitiesPageResponse {
   type_counts?: UsageIdentityTypeCount[]
 }
 
-export interface UsageQuotaWindow {
-  duration?: number
-  unit?: string
-  seconds?: number
-}
-
-export interface UsageQuotaRow {
-  key: string
-  label?: string
-  scope?: string
-  metric?: string
-  planType?: string
-  used?: number
-  limit?: number
-  remaining?: number
-  usedPercent?: number
-  remainingFraction?: number
-  allowed?: boolean
-  limitReached?: boolean
-  window?: UsageQuotaWindow
-  resetAt?: string
-  resetAfterSeconds?: number
-  window_usage_tokens?: number
-  window_usage_cost?: number
-}
-
-export interface UsageQuotaCheckResponse {
-  id: string
-  quota: UsageQuotaRow[]
-}
-
-export interface UsageQuotaCacheItem {
-  auth_index: string
-  status: 'completed' | 'failed'
-  quota?: UsageQuotaCheckResponse
-  error?: string
-  http_status_code?: number
-  expires_at?: string
-  refreshed_at?: string
-}
-
-export interface UsageQuotaCacheResponse {
-  items: UsageQuotaCacheItem[]
-}
-
-export interface UsageQuotaRefreshTaskResponse {
-  authIndex: string
-  status: 'queued' | 'running' | 'completed' | 'failed'
-  quota?: UsageQuotaCheckResponse
-  error?: string
-  http_status_code?: number
-  refreshed_at?: string
-  expiresAt?: string
-}
-
-export interface UsageQuotaRefreshTaskRef {
-  authIndex: string
-}
-
-export interface UsageQuotaRefreshRejectedAuthIndex {
-  authIndex: string
-  error: 'not_found' | 'not_auth_file' | 'unsupported' | 'duplicate' | 'duplicate_request' | 'invalid'
-}
-
-export interface UsageQuotaRefreshResponse {
-  tasks: UsageQuotaRefreshTaskRef[]
-  rejected: UsageQuotaRefreshRejectedAuthIndex[]
-  accepted: number
-  skipped: number
-  limit: number
-}
-
 export interface AnalysisTokenUsageBucket {
   bucket: string
   input_tokens: number
@@ -332,25 +238,13 @@ export interface AnalysisResponse {
   heatmap: AnalysisHeatmapPayload
 }
 
-export interface CpaApiKeySettingsItem {
-  id: string
-  keyAlias: string
-  displayKey: string
-  label: string
-  lastSyncedAt: string | null
-}
-
-export interface CpaApiKeyOption {
+export interface ApiKeyOption {
   id: string
   label: string
 }
 
-export interface CpaApiKeysResponse {
-  items: CpaApiKeySettingsItem[]
-}
-
-export interface CpaApiKeyOptionsResponse {
-  options: CpaApiKeyOption[]
+export interface ApiKeyOptionsResponse {
+  options: ApiKeyOption[]
 }
 
 export interface PricingEntry {
@@ -358,10 +252,6 @@ export interface PricingEntry {
   prompt_price_per_1m: number
   completion_price_per_1m: number
   cache_price_per_1m: number
-}
-
-export interface UsedModelsResponse {
-  models: string[]
 }
 
 export interface AvailableModelsResponse {

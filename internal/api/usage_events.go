@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/helper"
-	"cpa-usage-keeper/internal/service"
-	servicedto "cpa-usage-keeper/internal/service/dto"
-	"cpa-usage-keeper/internal/timeutil"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/helper"
+	"llmapi-dashboard/internal/service"
+	servicedto "llmapi-dashboard/internal/service/dto"
+	"llmapi-dashboard/internal/timeutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -66,7 +66,7 @@ func registerUsageEventsRoute(
 	router gin.IRoutes,
 	usageProvider service.UsageProvider,
 	usageIdentityProvider service.UsageIdentityProvider,
-	cpaAPIKeyProvider service.CPAAPIKeyProvider,
+	apiKeyProvider service.APIKeyProvider,
 ) {
 	router.GET("/usage/events/filters/models", func(c *gin.Context) {
 		models, err := loadUsageEventModelFilterOptions(c, usageProvider)
@@ -114,7 +114,7 @@ func registerUsageEventsRoute(
 			return
 		}
 		resolver := newUsageIdentityResolver(identities)
-		apiKeyInfos, err := loadCPAAPIKeyInfos(c, cpaAPIKeyProvider)
+		apiKeyInfos, err := loadAPIKeyInfos(c, apiKeyProvider)
 		if err != nil {
 			return
 		}

@@ -10,8 +10,8 @@ import (
 
 var configEnvKeys = []string{
 	"APP_DB_PATH", "APP_PORT", "APP_BASE_PATH", "TZ",
-	"AVAILABLE_MODELS_BASE_URL", "AVAILABLE_MODELS_API_KEY", "OHMYGPT_QUERY_URL", "OHMYGPT_QUERY_TOKEN", "DAILY_QUOTA_QUERY_COMMAND", "DAILY_QUOTA_CACHE_TTL", "CPA_BASE_URL", "CPA_MANAGEMENT_KEY", "AUTH_ENABLED", "LOGIN_PASSWORD", "AUTH_SESSION_TTL",
-	"WORK_DIR", "LOG_FILE_ENABLED", "BACKUP_ENABLED", "REDIS_QUEUE_ADDR", "TUTORIAL_PDF_PATH",
+	"AVAILABLE_MODELS_BASE_URL", "AVAILABLE_MODELS_API_KEY", "OHMYGPT_QUERY_URL", "OHMYGPT_QUERY_TOKEN", "DAILY_QUOTA_QUERY_COMMAND", "DAILY_QUOTA_CACHE_TTL", "AUTH_ENABLED", "LOGIN_PASSWORD", "AUTH_SESSION_TTL",
+	"LOG_FILE_ENABLED", "TUTORIAL_PDF_PATH",
 }
 
 func TestMain(m *testing.M) {
@@ -97,9 +97,6 @@ func TestLoadFromEnvAppliesReadOnlyDashboardDefaults(t *testing.T) {
 	if cfg.LogFileEnabled {
 		t.Fatal("expected persistent log files disabled in read-only dashboard mode")
 	}
-	if cfg.CPABaseURL != "" || cfg.CPAManagementKey != "" || cfg.BackupEnabled || cfg.RedisQueueAddr != "" {
-		t.Fatalf("expected CPA/backup/redis settings to be unused, got %+v", cfg)
-	}
 	if cfg.AuthEnabled || cfg.LoginPassword != "" || cfg.AuthSessionTTL != 7*24*time.Hour {
 		t.Fatalf("expected login protection defaults to be disabled with 168h TTL, got %+v", cfg)
 	}
@@ -118,7 +115,7 @@ func TestLoadReadsSpecifiedEnvFileAndResolvesDBPath(t *testing.T) {
 	withIsolatedEnvFiles(t)
 	envDir := t.TempDir()
 	envPath := filepath.Join(envDir, "custom.env")
-	if err := os.WriteFile(envPath, []byte("APP_DB_PATH=./snapshots/app.db\nAPP_PORT=9091\nAPP_BASE_PATH=/keeper/\nTUTORIAL_PDF_PATH=./guidance.pdf\n"), 0o600); err != nil {
+	if err := os.WriteFile(envPath, []byte("APP_DB_PATH=./snapshots/app.db\nAPP_PORT=9091\nAPP_BASE_PATH=/dashboard/\nTUTORIAL_PDF_PATH=./guidance.pdf\n"), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
 
@@ -127,15 +124,13 @@ func TestLoadReadsSpecifiedEnvFileAndResolvesDBPath(t *testing.T) {
 		t.Fatalf("Load returned error: %v", err)
 	}
 
-	if cfg.SQLitePath != filepath.Join(envDir, "snapshots", "app.db") || cfg.AppPort != "9091" || cfg.AppBasePath != "/keeper" || cfg.TutorialPDFPath != filepath.Join(envDir, "guidance.pdf") {
+	if cfg.SQLitePath != filepath.Join(envDir, "snapshots", "app.db") || cfg.AppPort != "9091" || cfg.AppBasePath != "/dashboard" || cfg.TutorialPDFPath != filepath.Join(envDir, "guidance.pdf") {
 		t.Fatalf("unexpected config from env file: %+v", cfg)
 	}
 }
 
 func TestLoadReadsLoginProtectionEnvVars(t *testing.T) {
 	t.Setenv("APP_DB_PATH", filepath.Join(t.TempDir(), "app.db"))
-	t.Setenv("CPA_BASE_URL", "https://cpa.example.com")
-	t.Setenv("CPA_MANAGEMENT_KEY", "secret")
 	t.Setenv("AUTH_ENABLED", "true")
 	t.Setenv("LOGIN_PASSWORD", "secret")
 	t.Setenv("AUTH_SESSION_TTL", "2h")
@@ -143,9 +138,6 @@ func TestLoadReadsLoginProtectionEnvVars(t *testing.T) {
 	cfg, err := LoadFromEnv()
 	if err != nil {
 		t.Fatalf("LoadFromEnv returned error: %v", err)
-	}
-	if cfg.CPABaseURL != "" || cfg.CPAManagementKey != "" {
-		t.Fatalf("expected CPA env vars to be ignored, got %+v", cfg)
 	}
 	if !cfg.AuthEnabled || cfg.LoginPassword != "secret" || cfg.AuthSessionTTL != 2*time.Hour {
 		t.Fatalf("expected login protection env vars to be applied, got %+v", cfg)
@@ -176,7 +168,7 @@ func TestLoadReadsOhMyGPTQueryEnvVars(t *testing.T) {
 		t.Fatalf("LoadFromEnv returned error: %v", err)
 	}
 	if cfg.OhMyGPTQueryURL != "https://example.com/api/v1/user/admin/get-api-tokens" || cfg.OhMyGPTQueryToken != "admin-token" {
-		t.Fatalf("expected Oh My GPT query env vars to be applied, got %+v", cfg)
+		t.Fatalf("expected OhMyGPT query env vars to be applied, got %+v", cfg)
 	}
 }
 
@@ -290,7 +282,7 @@ func TestLoadFromEnvAppliesDefaultTimeZone(t *testing.T) {
 
 func TestLoadFromEnvRejectsInvalidBasePath(t *testing.T) {
 	t.Setenv("APP_DB_PATH", filepath.Join(t.TempDir(), "app.db"))
-	t.Setenv("APP_BASE_PATH", "keeper")
+	t.Setenv("APP_BASE_PATH", "dashboard")
 
 	_, err := LoadFromEnv()
 	if err == nil || err.Error() != "APP_BASE_PATH is invalid: must start with '/'" {

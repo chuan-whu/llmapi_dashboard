@@ -1,0 +1,17 @@
+[Unit]
+Description=llmapi_dashboard
+Documentation=https://github.com/chuan-whu/llmapi_dashboard
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+# The README installation command replaces this placeholder with the package directory.
+WorkingDirectory=__LLMAPI_DASHBOARD_DIR__
+ExecStart=/bin/sh -c 'exec ./llmapi-dashboard'
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=multi-user.target

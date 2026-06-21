@@ -11,18 +11,16 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/config"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"llmapi-dashboard/internal/config"
 )
 
-func TestResolveLogDirUsesWorkDirFallback(t *testing.T) {
-	workDir := filepath.Join(t.TempDir(), "work")
+func TestResolveLogDirUsesProjectDefault(t *testing.T) {
+	logDir := resolveLogDir(config.Config{})
 
-	logDir := resolveLogDir(config.Config{WorkDir: workDir})
-
-	if logDir != filepath.Join(workDir, filepath.Base(config.DefaultLogDir)) {
-		t.Fatalf("expected log dir under work dir, got %q", logDir)
+	if logDir != filepath.Join(config.DefaultWorkDir, "logs") {
+		t.Fatalf("expected default project log dir, got %q", logDir)
 	}
 }
 
@@ -32,10 +30,9 @@ func TestConfigureWritesLogrusToDailyFile(t *testing.T) {
 
 	logDir := t.TempDir()
 	closer, err := Configure(config.Config{
-		LogLevel:         "info",
-		LogFileEnabled:   true,
-		LogDir:           logDir,
-		LogRetentionDays: 7,
+		LogLevel:       "info",
+		LogFileEnabled: true,
+		LogDir:         logDir,
 	})
 	if err != nil {
 		t.Fatalf("Configure returned error: %v", err)
@@ -58,9 +55,8 @@ func TestConfigureUsesFullTimestampFormatter(t *testing.T) {
 	defer reset()
 
 	closer, err := Configure(config.Config{
-		LogLevel:         "info",
-		LogFileEnabled:   false,
-		LogRetentionDays: 7,
+		LogLevel:       "info",
+		LogFileEnabled: false,
 	})
 	if err != nil {
 		t.Fatalf("Configure returned error: %v", err)
@@ -92,9 +88,8 @@ func TestConfigureWritesLogrusConsoleWithTimestamp(t *testing.T) {
 	}()
 
 	closer, err := Configure(config.Config{
-		LogLevel:         "info",
-		LogFileEnabled:   false,
-		LogRetentionDays: 7,
+		LogLevel:       "info",
+		LogFileEnabled: false,
 	})
 	if err != nil {
 		t.Fatalf("Configure returned error: %v", err)
@@ -127,10 +122,9 @@ func TestConfigureDisablesFileLogging(t *testing.T) {
 
 	logDir := t.TempDir()
 	closer, err := Configure(config.Config{
-		LogLevel:         "info",
-		LogFileEnabled:   false,
-		LogDir:           logDir,
-		LogRetentionDays: 7,
+		LogLevel:       "info",
+		LogFileEnabled: false,
+		LogDir:         logDir,
 	})
 	if err != nil {
 		t.Fatalf("Configure returned error: %v", err)
@@ -154,10 +148,9 @@ func TestConfigureRoutesStdlibLogAndSlogToFile(t *testing.T) {
 
 	logDir := t.TempDir()
 	closer, err := Configure(config.Config{
-		LogLevel:         "info",
-		LogFileEnabled:   true,
-		LogDir:           logDir,
-		LogRetentionDays: 7,
+		LogLevel:       "info",
+		LogFileEnabled: true,
+		LogDir:         logDir,
 	})
 	if err != nil {
 		t.Fatalf("Configure returned error: %v", err)
@@ -189,9 +182,8 @@ func TestConfigureRoutesGinDebugToTimestampedLogrusOutput(t *testing.T) {
 	}()
 
 	closer, err := Configure(config.Config{
-		LogLevel:         "info",
-		LogFileEnabled:   false,
-		LogRetentionDays: 7,
+		LogLevel:       "info",
+		LogFileEnabled: false,
 	})
 	if err != nil {
 		t.Fatalf("Configure returned error: %v", err)
@@ -239,10 +231,9 @@ func TestConfigureCloseRestoresGlobalLoggers(t *testing.T) {
 	}
 
 	closer, err := Configure(config.Config{
-		LogLevel:         "info",
-		LogFileEnabled:   true,
-		LogDir:           t.TempDir(),
-		LogRetentionDays: 7,
+		LogLevel:       "info",
+		LogFileEnabled: true,
+		LogDir:         t.TempDir(),
 	})
 	if err != nil {
 		t.Fatalf("Configure returned error: %v", err)
@@ -276,10 +267,9 @@ func TestConfigureErrorLeavesGlobalLoggerStateUnchanged(t *testing.T) {
 	}
 
 	_, err := Configure(config.Config{
-		LogLevel:         "error",
-		LogFileEnabled:   true,
-		LogDir:           invalidLogDir,
-		LogRetentionDays: 7,
+		LogLevel:       "error",
+		LogFileEnabled: true,
+		LogDir:         invalidLogDir,
 	})
 	if err == nil {
 		t.Fatal("expected Configure to return an error")
@@ -291,8 +281,8 @@ func TestConfigureErrorLeavesGlobalLoggerStateUnchanged(t *testing.T) {
 
 func TestRetentionDeletesOnlyOldAppLogs(t *testing.T) {
 	logDir := t.TempDir()
-	oldAppLog := filepath.Join(logDir, "cpa-usage-keeper-2020-01-01.log")
-	freshAppLog := filepath.Join(logDir, "cpa-usage-keeper-2099-01-01.log")
+	oldAppLog := filepath.Join(logDir, "llmapi-dashboard-2020-01-01.log")
+	freshAppLog := filepath.Join(logDir, "llmapi-dashboard-2099-01-01.log")
 	otherLog := filepath.Join(logDir, "other.log")
 	for _, path := range []string{oldAppLog, freshAppLog, otherLog} {
 		if err := os.WriteFile(path, []byte("log"), 0644); err != nil {
@@ -320,7 +310,7 @@ func TestRetentionDeletesOnlyOldAppLogs(t *testing.T) {
 
 func readTodayLogFile(t *testing.T, logDir string) string {
 	t.Helper()
-	path := filepath.Join(logDir, "cpa-usage-keeper-"+time.Now().Format("2006-01-02")+".log")
+	path := filepath.Join(logDir, "llmapi-dashboard-"+time.Now().Format("2006-01-02")+".log")
 	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read today log file: %v", err)

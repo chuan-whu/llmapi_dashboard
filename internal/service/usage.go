@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
-	"cpa-usage-keeper/internal/repository"
-	repodto "cpa-usage-keeper/internal/repository/dto"
-	servicedto "cpa-usage-keeper/internal/service/dto"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/repository"
+	repodto "llmapi-dashboard/internal/repository/dto"
+	servicedto "llmapi-dashboard/internal/service/dto"
 )
 
 type usageService struct {
@@ -28,7 +28,7 @@ func (s *usageService) resolveAPIGroupKey(apiKeyID string) (string, error) {
 	if err != nil || parsedID <= 0 {
 		return "", ErrInvalidID
 	}
-	apiKey, err := repository.FindActiveCPAAPIKeyByID(s.db, parsedID)
+	apiKey, err := repository.FindActiveAPIKeyByID(s.db, parsedID)
 	if err != nil {
 		return "", err
 	}

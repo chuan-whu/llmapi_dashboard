@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/config"
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/repository"
-	repositorydto "cpa-usage-keeper/internal/repository/dto"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/config"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/repository"
+	repositorydto "llmapi-dashboard/internal/repository/dto"
 )
 
 // BenchmarkUsageOverviewStatsBacked 衡量 Overview 查询走增量 stats 后的窗口查询成本。

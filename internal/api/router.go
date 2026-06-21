@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"io/fs"
 	"mime"
@@ -14,56 +13,24 @@ import (
 	"strings"
 	"time"
 
-	"cpa-usage-keeper/internal/poller"
-	"cpa-usage-keeper/internal/quota"
-	"cpa-usage-keeper/internal/service"
-	"cpa-usage-keeper/internal/timeutil"
-	"cpa-usage-keeper/internal/updatecheck"
-	"cpa-usage-keeper/internal/version"
 	"github.com/gin-gonic/gin"
+	"llmapi-dashboard/internal/service"
+	"llmapi-dashboard/internal/version"
 )
 
 const appBasePathPlaceholder = "__APP_BASE_PATH__"
 const tutorialPDFURLPlaceholder = "__TUTORIAL_PDF_URL__"
 const tutorialPDFRoutePath = "/api/v1/tutorial.pdf"
 
-type StatusProvider interface {
-	Status() poller.Status
-}
-
-type ActiveStatusRecorder interface {
-	RecordActiveStatus(time.Time)
-}
-
-type QuotaProvider interface {
-	GetCachedQuota(context.Context, quota.CacheRequest) (quota.CacheResponse, error)
-	Refresh(context.Context, quota.RefreshRequest) (quota.RefreshResponse, error)
-	GetRefreshTaskByAuthIndex(context.Context, string) (quota.RefreshTaskResponse, error)
-}
-
-type StatusRouteConfig struct {
-	CPAPublicURL   string
-	ActiveRecorder ActiveStatusRecorder
-}
-
 type TutorialPDFConfig struct {
 	Path string
-}
-
-type OptionalProviders struct {
-	UsageIdentity   service.UsageIdentityProvider
-	Quota           QuotaProvider
-	CPAAPIKeys      service.CPAAPIKeyProvider
-	DailyQuota      service.DailyQuotaProvider
-	Status          StatusRouteConfig
-	TutorialPDFPath string
 }
 
 func NewReadOnlyRouter(
 	staticFS fs.FS,
 	usageProvider service.UsageProvider,
 	usageIdentityProvider service.UsageIdentityProvider,
-	cpaAPIKeyProvider service.CPAAPIKeyProvider,
+	apiKeyProvider service.APIKeyProvider,
 	authConfig AuthConfig,
 	authHandler *authHandler,
 	basePath string,
@@ -117,83 +84,14 @@ func NewReadOnlyRouter(
 	registerDailyQuotaRoute(protected, dailyQuotaProvider)
 	registerTutorialPDFRoute(protected, tutorialPDFConfig)
 	registerUsageOverviewRoute(protected, usageProvider)
-	registerUsageAnalysisRoute(protected, usageProvider, cpaAPIKeyProvider)
-	registerUsageEventsRoute(protected, usageProvider, usageIdentityProvider, cpaAPIKeyProvider)
+	registerUsageAnalysisRoute(protected, usageProvider, apiKeyProvider)
+	registerUsageEventsRoute(protected, usageProvider, usageIdentityProvider, apiKeyProvider)
 	registerUsageIdentityRoutes(protected, usageIdentityProvider)
-	registerCPAAPIKeyOptionRoutes(protected, cpaAPIKeyProvider)
+	registerAPIKeyOptionRoutes(protected, apiKeyProvider)
 	registerReadOnlyPricingRoutes(protected, pricingProvider)
 	registerAvailableModelsRoutes(protected, availableModelsProvider)
 	registerOhMyGPTQueryRoutes(protected, ohMyGPTQueryProvider)
 	registerStaticRoutes(router, appGroup, staticFS, basePath, tutorialPDFConfig)
-	return router
-}
-
-func NewRouter(
-	staticFS fs.FS,
-	statusProvider StatusProvider,
-	usageProvider service.UsageProvider,
-	pricingProvider service.PricingProvider,
-	authConfig AuthConfig,
-	authHandler *authHandler,
-	basePath string,
-	optionalProviders ...OptionalProviders,
-) *gin.Engine {
-	router := gin.New()
-	_ = router.SetTrustedProxies(nil)
-	router.Use(gin.Recovery())
-
-	appGroup := router.Group(basePath)
-	registerHealthRoutes(appGroup)
-
-	apiV1 := appGroup.Group("/api/v1")
-	apiV1.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	authGroup := apiV1.Group("/auth")
-	if authHandler == nil {
-		authHandler = NewAuthHandler(authConfig, nil)
-	}
-	authHandler.registerRoutes(authGroup)
-
-	var usageIdentityProvider service.UsageIdentityProvider
-	var quotaProvider QuotaProvider
-	var cpaAPIKeyProvider service.CPAAPIKeyProvider
-	var dailyQuotaProvider service.DailyQuotaProvider
-	var statusConfig StatusRouteConfig
-	var tutorialPDFConfig TutorialPDFConfig
-	if len(optionalProviders) > 0 {
-		usageIdentityProvider = optionalProviders[0].UsageIdentity
-		quotaProvider = optionalProviders[0].Quota
-		cpaAPIKeyProvider = optionalProviders[0].CPAAPIKeys
-		dailyQuotaProvider = optionalProviders[0].DailyQuota
-		statusConfig = optionalProviders[0].Status
-		tutorialPDFConfig = TutorialPDFConfig{Path: optionalProviders[0].TutorialPDFPath}
-	}
-	authHandler.setCPAAPIKeyProvider(cpaAPIKeyProvider)
-
-	adminProtected := apiV1.Group("")
-	adminProtected.Use(authHandler.adminMiddleware())
-	registerStatusRoutes(adminProtected, statusProvider, statusConfig)
-	registerUpdateRoutes(adminProtected, nil)
-	registerUsageOverviewRoute(adminProtected, usageProvider)
-	registerUsageAnalysisRoute(adminProtected, usageProvider, cpaAPIKeyProvider)
-	registerUsageEventsRoute(adminProtected, usageProvider, usageIdentityProvider, cpaAPIKeyProvider)
-	registerUsageIdentityRoutes(adminProtected, usageIdentityProvider)
-	registerCPAAPIKeyRoutes(adminProtected, cpaAPIKeyProvider)
-	registerPricingRoutes(adminProtected, pricingProvider)
-	registerQuotaRoutes(adminProtected, quotaProvider)
-	registerDailyQuotaRoute(adminProtected, dailyQuotaProvider)
-	registerTutorialPDFRoute(adminProtected, tutorialPDFConfig)
-
-	keyViewerProtected := apiV1.Group("")
-	keyViewerProtected.Use(authHandler.apiKeyViewerMiddleware())
-	registerKeyOverviewRoute(keyViewerProtected, usageProvider, cpaAPIKeyProvider, authHandler)
-
-	if staticFS != nil {
-		registerStaticRoutes(router, appGroup, staticFS, basePath, tutorialPDFConfig)
-	}
-
 	return router
 }
 
@@ -370,63 +268,15 @@ func stripBasePath(basePath, requestPath string) (string, bool) {
 }
 
 type statusResponse struct {
-	Running            bool       `json:"running"`
-	SyncRunning        bool       `json:"sync_running"`
-	Timezone           string     `json:"timezone"`
-	Version            string     `json:"version"`
-	UpdateCheckEnabled bool       `json:"updateCheckEnabled"`
-	CPAPublicURL       string     `json:"cpa_public_url,omitempty"`
-	LastRunAt          *time.Time `json:"last_run_at,omitempty"`
-	LastError          string     `json:"last_error,omitempty"`
-	LastWarning        string     `json:"last_warning,omitempty"`
-	LastStatus         string     `json:"last_status,omitempty"`
-}
-
-func registerStatusRoutes(router gin.IRoutes, statusProvider StatusProvider, config StatusRouteConfig) {
-	router.GET("/status", func(c *gin.Context) {
-		if statusProvider == nil {
-			c.JSON(http.StatusOK, buildStatusResponse(poller.Status{}, config))
-			return
-		}
-
-		c.JSON(http.StatusOK, buildStatusResponse(statusProvider.Status(), config))
-	})
-	router.GET("/status/active", func(c *gin.Context) {
-		if config.ActiveRecorder != nil {
-			// 前端可见页面用这个轻量心跳续约，避免限额自动刷新在无人查看后台时持续扫库和请求上游。
-			config.ActiveRecorder.RecordActiveStatus(time.Now())
-		}
-		c.Status(http.StatusNoContent)
-	})
+	Timezone string `json:"timezone"`
+	Version  string `json:"version"`
 }
 
 func registerReadOnlyStatusRoute(router gin.IRoutes) {
 	router.GET("/status", func(c *gin.Context) {
 		c.JSON(http.StatusOK, statusResponse{
-			Running:            false,
-			SyncRunning:        false,
-			Timezone:           time.Local.String(),
-			Version:            version.Version,
-			UpdateCheckEnabled: false,
+			Timezone: time.Local.String(),
+			Version:  version.Version,
 		})
 	})
-}
-
-func buildStatusResponse(status poller.Status, config StatusRouteConfig) statusResponse {
-	response := statusResponse{
-		Running:            status.Running,
-		SyncRunning:        status.SyncRunning,
-		Timezone:           time.Local.String(),
-		Version:            version.Version,
-		UpdateCheckEnabled: updatecheck.IsStableVersion(version.Version),
-		CPAPublicURL:       config.CPAPublicURL,
-		LastError:          status.LastError,
-		LastWarning:        status.LastWarning,
-		LastStatus:         status.LastStatus,
-	}
-	if !status.LastRunAt.IsZero() {
-		lastRunAt := timeutil.NormalizeStorageTime(status.LastRunAt)
-		response.LastRunAt = &lastRunAt
-	}
-	return response
 }

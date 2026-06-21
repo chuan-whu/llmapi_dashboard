@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/repository"
-	repodto "cpa-usage-keeper/internal/repository/dto"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/repository"
+	repodto "llmapi-dashboard/internal/repository/dto"
 )
 
 type ListUsageIdentitiesRequest struct {

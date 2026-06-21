@@ -72,29 +72,34 @@ describe('i18n resources', () => {
 
     expect(zh.usage_stats.tab_analysis).toBe('分析');
     expect(zhTW.usage_stats.tab_analysis).toBe('分析');
+    expect(zh.key_overview).toBeUndefined();
+    expect(zhTW.key_overview).toBeUndefined();
     expect(JSON.stringify(zh)).not.toMatch(/该 key|当前 key|完整 key|打开 Key 概览|API-Key|凭证的只读|当前凭证/);
     expect(JSON.stringify(zhTW)).not.toMatch(/該 key|目前 key|完整 key|開啟 Key 總覽|API-Key|金鑰的唯讀|目前金鑰/);
   });
 
   it('does not keep API Key viewer or access-method auth copy', () => {
     for (const language of SUPPORTED_LANGUAGES) {
-      expect(i18n.getResource(language, 'translation', 'auth.console_title')).toBe('');
-      expect(i18n.getResource(language, 'translation', 'auth.console_hint')).toBe('');
-      expect(i18n.getResource(language, 'translation', 'auth.login_method')).toBe('');
-      expect(i18n.getResource(language, 'translation', 'auth.api_key_tab')).toBe('');
-      expect(i18n.getResource(language, 'translation', 'auth.api_key_label')).toBe('');
-      expect(i18n.getResource(language, 'translation', 'auth.api_key_placeholder')).toBe('');
-      expect(i18n.getResource(language, 'translation', 'auth.api_key_hint')).toBe('');
-      expect(i18n.getResource(language, 'translation', 'auth.api_key_login_submit')).toBe('');
-      expect(i18n.getResource(language, 'translation', 'auth.invalid_api_key')).toBe('');
-      expect(i18n.getResource(language, 'translation', 'auth.api_key_login_failed')).toBe('');
+      const auth = i18n.getResourceBundle(language, 'translation').auth;
+      expect(auth.console_title).toBeUndefined();
+      expect(auth.console_hint).toBeUndefined();
+      expect(auth.login_method).toBeUndefined();
+      expect(auth.api_key_tab).toBeUndefined();
+      expect(auth.api_key_label).toBeUndefined();
+      expect(auth.api_key_placeholder).toBeUndefined();
+      expect(auth.api_key_hint).toBeUndefined();
+      expect(auth.api_key_login_submit).toBeUndefined();
+      expect(auth.invalid_api_key).toBeUndefined();
+      expect(auth.api_key_login_failed).toBeUndefined();
     }
   });
 
-  it('does not keep API Key alias display copy', () => {
+  it('does not keep removed API Key settings copy', () => {
     for (const language of SUPPORTED_LANGUAGES) {
-      expect(i18n.getResource(language, 'translation', 'usage_stats.api_key_settings_alias')).toBe('');
-      expect(i18n.getResource(language, 'translation', 'usage_stats.api_key_settings_saving')).toBe('');
+      const usageStats = i18n.getResourceBundle(language, 'translation').usage_stats;
+      expect(usageStats.api_key_settings_alias).toBeUndefined();
+      expect(usageStats.api_key_settings_saving).toBeUndefined();
+      expect(usageStats.api_key_settings_title).toBeUndefined();
     }
   });
 

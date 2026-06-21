@@ -10,14 +10,12 @@ import (
 type Role string
 
 const (
-	RoleAdmin        Role = "admin"
-	RoleAPIKeyViewer Role = "api_key_viewer"
+	RoleAdmin Role = "admin"
 )
 
 type Session struct {
-	Role        Role
-	CPAAPIKeyID int64
-	ExpiresAt   time.Time
+	Role      Role
+	ExpiresAt time.Time
 }
 
 type SessionManager struct {
@@ -40,10 +38,6 @@ func NewSessionManager(ttl time.Duration) *SessionManager {
 
 func (m *SessionManager) Create() (string, time.Time, error) {
 	return m.create(Session{Role: RoleAdmin})
-}
-
-func (m *SessionManager) CreateAPIKeyViewer(cpaAPIKeyID int64) (string, time.Time, error) {
-	return m.create(Session{Role: RoleAPIKeyViewer, CPAAPIKeyID: cpaAPIKeyID})
 }
 
 func (m *SessionManager) create(session Session) (string, time.Time, error) {

@@ -3,8 +3,6 @@ import {
   buildCustomDateRangeQuery,
   DAILY_QUOTA_REFRESH_INTERVAL_MS,
   formatDailyQuotaDisplayText,
-  getBackToCPALinkURL,
-  getCredentialSectionVisibility,
   getCustomDateRangeBounds,
   getOverviewChartEndMs,
   getOverviewDisplayLoading,
@@ -21,12 +19,11 @@ import {
   refreshPageData,
   sanitizeRequestEventFilters,
   scheduleOverviewAutoRefresh,
-  scheduleStatusActiveHeartbeat,
+  shouldShowAiProviderCredentials,
   shouldAutoRefreshUsageTab,
   shouldLoadPricingOnUsageTabEntry,
   shouldShowApiKeyFilter,
   shouldShowRangeControls,
-  shouldShowUpdateCheckButton,
   pricingEntriesToModelPriceMap,
 } from './UsagePage';
 import type { UsageFilterWindow } from '@/lib/types';
@@ -66,20 +63,10 @@ describe('UsagePage read-only dashboard scope', () => {
   });
 
   it('exposes only the anonymized AI provider credential section', () => {
-    expect(getCredentialSectionVisibility('ai-provider')).toEqual({
-      enabled: true,
-      showAuthFiles: false,
-      showAiProvider: true,
-    });
-    expect(getCredentialSectionVisibility('auth-files')).toEqual({
-      enabled: false,
-      showAuthFiles: false,
-      showAiProvider: false,
-    });
+    expect(shouldShowAiProviderCredentials('ai-provider')).toBe(true);
+    expect(shouldShowAiProviderCredentials('auth-files')).toBe(false);
     expect(shouldLoadPricingOnUsageTabEntry('model-info')).toBe(true);
     expect(shouldLoadPricingOnUsageTabEntry('events')).toBe(true);
-    expect(shouldShowUpdateCheckButton()).toBe(false);
-    expect(getBackToCPALinkURL()).toBe('');
   });
 
   it('normalizes unknown and removed tab values to the default fallback path', () => {
@@ -231,13 +218,6 @@ describe('UsagePage Overview auto-refresh', () => {
     expect(refreshOverview).not.toHaveBeenCalled();
 
     cleanup();
-  });
-});
-
-describe('UsagePage status active heartbeat', () => {
-  it('is disabled in read-only dashboard mode', () => {
-    const cleanup = scheduleStatusActiveHeartbeat();
-    expect(cleanup()).toBeUndefined();
   });
 });
 

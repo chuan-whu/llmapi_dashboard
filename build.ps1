@@ -1,5 +1,5 @@
 param(
-    [string]$OutputPath = ".\build\cpa-usage-keeper.exe",
+    [string]$OutputPath = ".\build\llmapi-dashboard.exe",
     [string]$Msys2Root = "D:\msys2",
     [switch]$SkipWebBuild
 )

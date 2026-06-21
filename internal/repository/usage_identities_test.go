@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/repository/dto"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/repository/dto"
 )
 
 func TestUsageIdentityReplaceForAuthTypeMarksStaleRowsDeletedAndPreservesStats(t *testing.T) {
@@ -839,7 +839,7 @@ func TestUsageIdentityListActivePageFiltersEnabledAuthFilesAndOrdersByPriority(t
 		t.Fatalf("expected total 3, got %d", total)
 	}
 	if got := []string{items[0].Identity, items[1].Identity, items[2].Identity}; !reflect.DeepEqual(got, []string{"priority-5", "priority-1", "default"}) {
-		t.Fatalf("expected enabled auth files sorted by priority desc with missing priority last, got %v", got)
+		t.Fatalf("expected enabled auth identities sorted by priority desc with missing priority last, got %v", got)
 	}
 }
 

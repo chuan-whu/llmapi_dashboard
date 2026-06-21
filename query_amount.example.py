@@ -40,7 +40,7 @@ EXAMPLE_REAL_REQUEST = {
     "url": "https://example.com/api/balance",
     "key": "replace-with-private-token",
     "parser": "mock_balance",
-    "headers": {"User-Agent": "cpa-usage-keeper/1.0"},
+    "headers": {"User-Agent": "llmapi-dashboard/1.0"},
     # Optional per-request proxy. Remove it when the endpoint does not need a proxy.
     # "proxy": "http://127.0.0.1:7890",
 }

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/config"
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/repository"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/config"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/repository"
 )
 
 func TestAppCloseClosesDatabase(t *testing.T) {
@@ -40,9 +40,6 @@ func TestNewWithConfigBuildsReadOnlyDashboardOnly(t *testing.T) {
 	}
 	defer app.Close()
 
-	if app.Poller != nil || app.RedisIngest != nil || app.RedisProcess != nil || app.Maintenance != nil || app.MetadataSync != nil || app.QuotaService != nil || app.QuotaAutoRefresh != nil || app.BackupMaintenance != nil {
-		t.Fatalf("expected read-only app to skip CPA/background runners, got %+v", app)
-	}
 	if app.Router == nil || app.LogCloser == nil || app.DB == nil {
 		t.Fatalf("expected router, log closer, and db to be initialized, got %+v", app)
 	}
@@ -61,7 +58,7 @@ func TestNewWithConfigOpensDatabaseReadOnly(t *testing.T) {
 	}
 }
 
-func TestReadOnlyRouterKeepsDashboardEndpointsAndDropsCPADependentEndpoints(t *testing.T) {
+func TestReadOnlyRouterKeepsDashboardEndpoints(t *testing.T) {
 	app, err := NewWithConfig(testAppConfig(t))
 	if err != nil {
 		t.Fatalf("NewWithConfig returned error: %v", err)
@@ -87,10 +84,6 @@ func TestReadOnlyRouterKeepsDashboardEndpointsAndDropsCPADependentEndpoints(t *t
 		{method: http.MethodDelete, path: "/api/v1/pricing?model=gpt-5", status: http.StatusNotFound},
 		{method: http.MethodGet, path: "/api/v1/auth/session", status: http.StatusOK},
 		{method: http.MethodPost, path: "/api/v1/auth/logout", status: http.StatusNoContent},
-		{method: http.MethodPost, path: "/api/v1/auth/api-key-login", status: http.StatusNotFound},
-		{method: http.MethodGet, path: "/api/v1/key-overview?range=8h", status: http.StatusNotFound},
-		{method: http.MethodPost, path: "/api/v1/quota/refresh", status: http.StatusNotFound},
-		{method: http.MethodGet, path: "/api/v1/update/check", status: http.StatusNotFound},
 	} {
 		resp := httptest.NewRecorder()
 		req := httptest.NewRequest(testCase.method, testCase.path, nil)
@@ -153,7 +146,7 @@ func TestStatusIsLocalOnly(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", resp.Code)
 	}
 	body := resp.Body.String()
-	for _, forbidden := range []string{"cpa_public_url", "last_run_at", "last_error"} {
+	for _, forbidden := range []string{"public_url", "running"} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("expected local status response not to include %q, got %s", forbidden, body)
 		}

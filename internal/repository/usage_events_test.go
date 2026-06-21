@@ -1,13 +1,13 @@
 package repository
 
 import (
-	"cpa-usage-keeper/internal/repository/dto"
+	"llmapi-dashboard/internal/repository/dto"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/config"
-	"cpa-usage-keeper/internal/entities"
+	"llmapi-dashboard/internal/config"
+	"llmapi-dashboard/internal/entities"
 )
 
 func TestListUsageEventsWithFilterAppliesTimeBoundsAndPagination(t *testing.T) {

@@ -3,7 +3,7 @@ package dto
 import (
 	"time"
 
-	repodto "cpa-usage-keeper/internal/repository/dto"
+	repodto "llmapi-dashboard/internal/repository/dto"
 )
 
 const DefaultUsageEventsLimit = 100

@@ -1,62 +1,31 @@
 package app
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"sync"
 
-	"cpa-usage-keeper/internal/api"
-	"cpa-usage-keeper/internal/auth"
-	"cpa-usage-keeper/internal/config"
-	"cpa-usage-keeper/internal/logging"
-	"cpa-usage-keeper/internal/poller"
-	"cpa-usage-keeper/internal/repository"
-	"cpa-usage-keeper/internal/service"
-	webui "cpa-usage-keeper/web"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/api"
+	"llmapi-dashboard/internal/auth"
+	"llmapi-dashboard/internal/config"
+	"llmapi-dashboard/internal/logging"
+	"llmapi-dashboard/internal/repository"
+	"llmapi-dashboard/internal/service"
+	webui "llmapi-dashboard/web"
 )
-
-// Runner 是 App 后台任务的最小接口，具体语义由字段名和实现方法表达。
-type Runner interface {
-	Run(ctx context.Context) error
-}
-
-// StatusProvider 只提供运行状态，不作为后台 runner 启动。
-type StatusProvider interface {
-	Status() poller.Status
-}
 
 type Options struct {
 	EnvFile string
 }
 
-type QuotaRunner interface {
-	SetRefreshContext(context.Context)
-	StopRefreshTasks()
-	WaitRefreshTasks()
-	StartAutoRefresh(context.Context) error
-}
-
 type App struct {
-	Config            *config.Config
-	DB                *gorm.DB
-	Router            *gin.Engine
-	Poller            StatusProvider
-	RedisIngest       Runner
-	RedisProcess      Runner
-	Maintenance       *StorageCleanupRunner
-	MetadataSync      *MetadataSyncRunner
-	QuotaService      QuotaRunner
-	QuotaAutoRefresh  QuotaRunner
-	BackupMaintenance *DatabaseBackupRunner
-	LogCloser         io.Closer
-
-	backgroundCancel context.CancelFunc
-	backgroundWG     sync.WaitGroup
+	Config    *config.Config
+	DB        *gorm.DB
+	Router    *gin.Engine
+	LogCloser io.Closer
 }
 
 func New() (*App, error) {
@@ -86,7 +55,7 @@ func NewWithConfig(cfg config.Config) (*App, error) {
 
 	usageService := service.NewUsageService(db)
 	usageIdentityService := service.NewUsageIdentityService(db)
-	cpaAPIKeyService := service.NewCPAAPIKeyService(db)
+	apiKeyService := service.NewAPIKeyService(db)
 	pricingService := service.NewPricingService(db)
 	availableModelsService := service.NewAvailableModelsService(cfg.AvailableModelsBaseURL, cfg.AvailableModelsAPIKey)
 	ohMyGPTQueryService := service.NewOhMyGPTQueryService(cfg.OhMyGPTQueryURL, cfg.OhMyGPTQueryToken)
@@ -108,7 +77,7 @@ func NewWithConfig(cfg config.Config) (*App, error) {
 			webui.Static,
 			usageService,
 			usageIdentityService,
-			cpaAPIKeyService,
+			apiKeyService,
 			authConfig,
 			authHandler,
 			cfg.AppBasePath,
@@ -137,11 +106,6 @@ func (a *App) Close() error {
 		return nil
 	}
 
-	a.stopBackgroundTasks()
-	if a.QuotaService != nil {
-		a.QuotaService.StopRefreshTasks()
-	}
-
 	var closeErr error
 	if a.DB != nil {
 		closeErr = errors.Join(closeErr, closeGormDB(a.DB))
@@ -164,26 +128,4 @@ func (a *App) Run() error {
 		Handler: a.Router,
 	}
 	return server.ListenAndServe()
-}
-
-func (a *App) startBackgroundContext() context.Context {
-	ctx, cancel := context.WithCancel(context.Background())
-	a.backgroundCancel = cancel
-	return ctx
-}
-
-func (a *App) startBackgroundTask(run func()) {
-	a.backgroundWG.Add(1)
-	go func() {
-		defer a.backgroundWG.Done()
-		run()
-	}()
-}
-
-func (a *App) stopBackgroundTasks() {
-	if a.backgroundCancel != nil {
-		a.backgroundCancel()
-		a.backgroundCancel = nil
-	}
-	a.backgroundWG.Wait()
 }

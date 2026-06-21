@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/config"
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/helper"
-	"cpa-usage-keeper/internal/repository/dto"
-	"cpa-usage-keeper/internal/timeutil"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/config"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/helper"
+	"llmapi-dashboard/internal/repository/dto"
+	"llmapi-dashboard/internal/timeutil"
 )
 
 func withRepositoryTestLocation(t *testing.T, name string) {

@@ -1,13 +1,13 @@
 package repository
 
 import (
-	"cpa-usage-keeper/internal/repository/dto"
 	"fmt"
+	"llmapi-dashboard/internal/repository/dto"
 	"sort"
 	"strings"
 
-	"cpa-usage-keeper/internal/entities"
 	"gorm.io/gorm"
+	"llmapi-dashboard/internal/entities"
 )
 
 func ListUsedModels(db *gorm.DB) ([]string, error) {

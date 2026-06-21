@@ -304,7 +304,7 @@ export function resolveUsageFilterWindow(
 
 export function loadModelPrices(): Record<string, ModelPrice> {
   try {
-    const raw = window.localStorage.getItem('cpa-model-prices');
+    const raw = window.localStorage.getItem('llmapi-dashboard-model-prices');
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, ModelPrice>;
     return parsed && typeof parsed === 'object' ? parsed : {};
@@ -314,7 +314,7 @@ export function loadModelPrices(): Record<string, ModelPrice> {
 }
 
 export function saveModelPrices(prices: Record<string, ModelPrice>): void {
-  window.localStorage.setItem('cpa-model-prices', JSON.stringify(prices));
+  window.localStorage.setItem('llmapi-dashboard-model-prices', JSON.stringify(prices));
 }
 
 export function calculateCost(detail: UsageCostDetail, modelPrices: Record<string, ModelPrice>): number {
@@ -358,7 +358,7 @@ export function calculateCacheRate({
   return (cached / denominator) * 100;
 }
 
-// CPA 把 provider 原始口径直接落库；Anthropic 的 input_tokens 不含 cached，其它 provider 都含。
+// Provider 原始口径直接落库；Anthropic 的 input_tokens 不含 cached，其它 provider 都含。
 // 计算成本/缓存率时需要按 source_type 区分公式。
 export function isAnthropicStyleProvider(sourceType: unknown): boolean {
   if (typeof sourceType !== 'string') return false;

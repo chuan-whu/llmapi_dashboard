@@ -3,7 +3,7 @@ package helper
 import (
 	"strings"
 
-	"cpa-usage-keeper/internal/entities"
+	"llmapi-dashboard/internal/entities"
 )
 
 const sensitiveValueMask = "*********"
@@ -22,17 +22,17 @@ func RedactSensitiveValue(value string) string {
 	return string(runes[:3]) + sensitiveValueMask + string(runes[len(runes)-6:])
 }
 
-// CPAAPIKeyMaskedDisplayKey 返回 CPA API Key 的安全展示 key；优先基于原始 key 重新脱敏，避免历史 DisplayKey 格式不一致。
-func CPAAPIKeyMaskedDisplayKey(row entities.CPAAPIKey) string {
+// APIKeyMaskedDisplayKey 返回 API Key 的安全展示值；优先基于原始 key 重新脱敏，避免历史 DisplayKey 格式不一致。
+func APIKeyMaskedDisplayKey(row entities.APIKey) string {
 	if strings.TrimSpace(row.APIKey) != "" {
 		return MaskAPIKeyForDisplay(row.APIKey)
 	}
 	return strings.TrimSpace(row.DisplayKey)
 }
 
-// CPAAPIKeyDisplayName 返回 CPA API Key 的前端展示名。别名只保存在库里，不对看板展示。
-func CPAAPIKeyDisplayName(row entities.CPAAPIKey) string {
-	return CPAAPIKeyMaskedDisplayKey(row)
+// APIKeyDisplayName 返回 API Key 的前端展示名。别名只保存在库里，不对看板展示。
+func APIKeyDisplayName(row entities.APIKey) string {
+	return APIKeyMaskedDisplayKey(row)
 }
 
 // MaskAPIKeyForDisplay masks API keys for dashboard labels while preserving

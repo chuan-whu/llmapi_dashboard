@@ -59,7 +59,7 @@ func (s *ohMyGPTQueryService) QueryAPIKey(ctx context.Context, apiKey string) (O
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.endpoint, nil)
 	if err != nil {
-		return OhMyGPTQueryResponse{}, fmt.Errorf("create Oh My GPT query request: %w", err)
+		return OhMyGPTQueryResponse{}, fmt.Errorf("create OhMyGPT query request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+s.token)
 	req.Header.Set("Accept", "application/json")
@@ -70,16 +70,16 @@ func (s *ohMyGPTQueryService) QueryAPIKey(ctx context.Context, apiKey string) (O
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return OhMyGPTQueryResponse{}, fmt.Errorf("query Oh My GPT quota: %w", err)
+		return OhMyGPTQueryResponse{}, fmt.Errorf("query OhMyGPT quota: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return OhMyGPTQueryResponse{}, fmt.Errorf("query Oh My GPT quota returned status %d", resp.StatusCode)
+		return OhMyGPTQueryResponse{}, fmt.Errorf("query OhMyGPT quota returned status %d", resp.StatusCode)
 	}
 
 	var result OhMyGPTQueryResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return OhMyGPTQueryResponse{}, fmt.Errorf("decode Oh My GPT query response: %w", err)
+		return OhMyGPTQueryResponse{}, fmt.Errorf("decode OhMyGPT query response: %w", err)
 	}
 	result.Data = filterOhMyGPTTokensByAPIKey(result.Data, trimmedAPIKey)
 	return result, nil

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/auth"
-	"cpa-usage-keeper/internal/service"
+	"llmapi-dashboard/internal/auth"
+	"llmapi-dashboard/internal/service"
 )
 
 func TestReadOnlyDailyQuotaRouteReturnsProviderResult(t *testing.T) {

@@ -178,10 +178,10 @@ describe('AnalysisPanel composition chart data', () => {
         percent: 100,
       }],
       heatmap: {
-        api_keys: ['sk-live-secret-value-1234567890'],
+        api_keys: ['sk-fake-key-123456'],
         models: ['model-a'],
         cells: [{
-          api_key: 'sk-live-secret-value-1234567890',
+          api_key: 'sk-fake-key-123456',
           model: 'model-a',
           total_tokens: 1000,
           requests: 2,
@@ -192,7 +192,7 @@ describe('AnalysisPanel composition chart data', () => {
 
     const html = renderToStaticMarkup(<AnalysisPanel analysis={analysis} loading={false} isDark={false} isMobile={false} />);
 
-    expect(html).toMatch(/sk-l\*+7890/);
+    expect(html).toMatch(/sk-f\*+3456/);
     expect(html).toContain('AI account 1');
     expect(html).not.toContain('sk-live-secret-value-1234567890');
     expect(html).not.toContain('Production Alias');

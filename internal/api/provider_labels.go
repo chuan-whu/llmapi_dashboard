@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"cpa-usage-keeper/internal/entities"
+	"llmapi-dashboard/internal/entities"
 )
 
 type providerAccountLabels struct {

@@ -4,10 +4,9 @@ package entities
 func All() []any {
 	return []any{
 		&UsageEvent{},
-		&RedisUsageInbox{},
 		&ModelPriceSetting{},
 		&UsageIdentity{},
-		&CPAAPIKey{},
+		&APIKey{},
 		&UsageOverviewHourlyStat{},
 		&UsageOverviewDailyStat{},
 		&UsageOverviewHealthStat{},

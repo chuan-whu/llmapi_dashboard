@@ -51,17 +51,16 @@ describe('ModelInfoPanel', () => {
     expect(html).toContain('Oh My GPT额度与可用模型查询');
     expect(html).toContain('请输入你的API KEY');
     expect(html).toContain('Codex的额度是共享的，这里只能查询自己的Oh My GPT额度。可点击顶部使用教程按钮查看详情。');
-    expect(html).not.toContain('API Key Query');
     expect(html).toContain('查询');
     expect(html).toContain('type="password"');
   });
 
-  it('formats Oh My GPT quota records with semantic labels and Beijing time', () => {
+  it('formats OhMyGPT quota records with semantic labels and Beijing time', () => {
     const viewModel = presentOhMyGPTQueryResponse({
       statusCode: 200,
       message: 'Get api keys success, total keys: 1',
       data: [{
-        key: 'sk-*************************************************6dc',
+        key: 'sk-fake-full-value-alpha',
         user_id: '55255',
         remark: '张三',
         created_at: '2025-07-30T07:31:10.000Z',
@@ -81,7 +80,7 @@ describe('ModelInfoPanel', () => {
     expect(viewModel.items).toHaveLength(1);
     expect(viewModel.items[0]).toMatchObject({
       name: '张三',
-      key: 'sk-*************************************************6dc',
+      key: 'sk-f****************lpha',
       status: '可用',
       usedFee: '$0.00',
       maxFee: '$1.00',
@@ -99,49 +98,32 @@ describe('ModelInfoPanel', () => {
   });
 
   it('renders formatted quota results instead of raw JSON', () => {
+    const queryResult = {
+      statusCode: 200,
+      message: 'Get api keys success, total keys: 1',
+      data: [{
+        key: 'sk-fake-full-value-alpha',
+        user_id: '55255',
+        remark: '张三',
+        created_at: '2025-07-30T07:31:10.000Z',
+        used_at: null,
+        expired_at: '2035-07-28T07:26:00.000Z',
+        used_times: '1',
+        used_fee: '90.00',
+        max_fee: '250000.00',
+        permissions: ['gpt-5'],
+        is_admin: false,
+        is_disabled: true,
+        is_check_permission: false,
+      }],
+    };
     const html = renderToStaticMarkup(
       <ModelInfoPanel
         availableModels={[]}
         pricing={[]}
         loading={false}
-        onApiKeyQuery={async () => ({
-          statusCode: 200,
-          message: 'Get api keys success, total keys: 1',
-          data: [{
-            key: 'sk-*************************************************6dc',
-            user_id: '55255',
-            remark: '张三',
-            created_at: '2025-07-30T07:31:10.000Z',
-            used_at: null,
-            expired_at: '2035-07-28T07:26:00.000Z',
-            used_times: '1',
-            used_fee: '90.00',
-            max_fee: '250000.00',
-            permissions: ['gpt-5'],
-            is_admin: false,
-            is_disabled: true,
-            is_check_permission: false,
-          }],
-        })}
-        initialQueryResult={{
-          statusCode: 200,
-          message: 'Get api keys success, total keys: 1',
-          data: [{
-            key: 'sk-*************************************************6dc',
-            user_id: '55255',
-            remark: '张三',
-            created_at: '2025-07-30T07:31:10.000Z',
-            used_at: null,
-            expired_at: '2035-07-28T07:26:00.000Z',
-            used_times: '1',
-            used_fee: '90.00',
-            max_fee: '250000.00',
-            permissions: ['gpt-5'],
-            is_admin: false,
-            is_disabled: true,
-            is_check_permission: false,
-          }],
-        }}
+        onApiKeyQuery={async () => queryResult}
+        initialQueryResult={queryResult}
       />,
     );
 

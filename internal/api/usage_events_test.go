@@ -7,8 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/entities"
-	servicedto "cpa-usage-keeper/internal/service/dto"
+	"github.com/gin-gonic/gin"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/service"
+	servicedto "llmapi-dashboard/internal/service/dto"
 )
 
 type usageEventsStub struct {
@@ -19,6 +21,18 @@ type usageEventsStub struct {
 	lastFilter         servicedto.UsageFilter
 	filterCalls        int
 	filterOptionCalls  int
+}
+
+type authAPIKeyStub struct {
+	row entities.APIKey
+	err error
+}
+
+func (s authAPIKeyStub) ListAPIKeys(context.Context) ([]entities.APIKey, error) {
+	if s.row.ID == 0 && s.row.APIKey == "" && s.row.DisplayKey == "" {
+		return nil, s.err
+	}
+	return []entities.APIKey{s.row}, s.err
 }
 
 func (s *usageEventsStub) GetUsageOverview(context.Context, servicedto.UsageFilter) (*servicedto.UsageOverviewSnapshot, error) {
@@ -45,6 +59,10 @@ func (s *usageEventsStub) ListUsageEventFilterOptions(_ context.Context, filter 
 
 func (s *usageEventsStub) GetAnalysis(context.Context, servicedto.UsageFilter) (*servicedto.AnalysisSnapshot, error) {
 	return nil, s.err
+}
+
+func newUsageEventsTestRouter(provider service.UsageProvider, identityProvider service.UsageIdentityProvider, apiKeyProvider service.APIKeyProvider) *gin.Engine {
+	return NewReadOnlyRouter(nil, provider, identityProvider, apiKeyProvider, AuthConfig{}, nil, "")
 }
 
 func TestUsageEventsReturnsFilteredRows(t *testing.T) {
@@ -77,7 +95,7 @@ func TestUsageEventsReturnsFilteredRows(t *testing.T) {
 		CacheCreationTokens: 4,
 		TotalTokens:         18,
 	}}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "")
+	router := newUsageEventsTestRouter(provider, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -143,13 +161,13 @@ func TestUsageEventsResponseDoesNotExposeSourceKey(t *testing.T) {
 		Provider:  "Fallback Provider",
 		AuthIndex: "provider-auth-index",
 	}}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{items: []entities.UsageIdentity{{
+	router := newUsageEventsTestRouter(provider, usageIdentitiesStub{items: []entities.UsageIdentity{{
 		ID:           12,
 		Name:         "Provider Name",
 		AuthType:     entities.UsageIdentityAuthTypeAIProvider,
 		AuthTypeName: "apikey",
 		Identity:     "provider-auth-index",
-	}}}})
+	}}}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -164,7 +182,7 @@ func TestUsageEventsResponseDoesNotExposeSourceKey(t *testing.T) {
 	}
 }
 
-func TestUsageEventsIgnoresCPAAPIKeyAliasFromGroupKey(t *testing.T) {
+func TestUsageEventsIgnoresAPIKeyAliasFromGroupKey(t *testing.T) {
 	provider := &usageEventsStub{events: []servicedto.UsageEventRecord{{
 		ID:          49,
 		Timestamp:   time.Date(2026, 4, 22, 11, 0, 0, 0, time.UTC),
@@ -173,13 +191,13 @@ func TestUsageEventsIgnoresCPAAPIKeyAliasFromGroupKey(t *testing.T) {
 		AuthType:    "apikey",
 		Provider:    "Fallback Provider",
 	}}}
-	keyProvider := &authCPAAPIKeyStub{row: entities.CPAAPIKey{
+	keyProvider := &authAPIKeyStub{row: entities.APIKey{
 		ID:         7,
 		APIKey:     "sk-alpha123456",
 		DisplayKey: "sk-*********123456",
 		KeyAlias:   "Production Key",
 	}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "", OptionalProviders{CPAAPIKeys: keyProvider})
+	router := newUsageEventsTestRouter(provider, nil, keyProvider)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -197,7 +215,7 @@ func TestUsageEventsIgnoresCPAAPIKeyAliasFromGroupKey(t *testing.T) {
 	}
 }
 
-func TestUsageEventsFallsBackToMaskedCPAAPIKeyFromGroupKey(t *testing.T) {
+func TestUsageEventsFallsBackToMaskedAPIKeyFromGroupKey(t *testing.T) {
 	provider := &usageEventsStub{events: []servicedto.UsageEventRecord{{
 		ID:          50,
 		Timestamp:   time.Date(2026, 4, 22, 11, 0, 0, 0, time.UTC),
@@ -206,12 +224,12 @@ func TestUsageEventsFallsBackToMaskedCPAAPIKeyFromGroupKey(t *testing.T) {
 		AuthType:    "apikey",
 		Provider:    "Fallback Provider",
 	}}}
-	keyProvider := &authCPAAPIKeyStub{row: entities.CPAAPIKey{
+	keyProvider := &authAPIKeyStub{row: entities.APIKey{
 		ID:         8,
 		APIKey:     "sk-beta654321",
 		DisplayKey: "sk-*********654321",
 	}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "", OptionalProviders{CPAAPIKeys: keyProvider})
+	router := newUsageEventsTestRouter(provider, nil, keyProvider)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -233,12 +251,12 @@ func TestUsageEventsFallsBackToCanonicalMaskedAPIKeyWhenGroupKeyIsUnmatched(t *t
 	provider := &usageEventsStub{events: []servicedto.UsageEventRecord{{
 		ID:          51,
 		Timestamp:   time.Date(2026, 4, 22, 11, 0, 0, 0, time.UTC),
-		APIGroupKey: "sk-BabcdefghijklmnopqrstuvwxyzmaWyTA",
+		APIGroupKey: "sk-demo-key-1234",
 		Model:       "claude-sonnet",
 		AuthType:    "apikey",
 		Provider:    "Fallback Provider",
 	}}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "", OptionalProviders{})
+	router := newUsageEventsTestRouter(provider, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -248,10 +266,10 @@ func TestUsageEventsFallsBackToCanonicalMaskedAPIKeyWhenGroupKeyIsUnmatched(t *t
 	if resp.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", resp.Code, body)
 	}
-	if !contains(body, `"api_key":"sk-B*****************WyTA"`) {
+	if !contains(body, `"api_key":"sk-d*****************1234"`) {
 		t.Fatalf("expected canonical masked API key in response body: %s", body)
 	}
-	if contains(body, `sk-BabcdefghijklmnopqrstuvwxyzmaWyTA`) || contains(body, `sk-B***************************WyTA`) {
+	if contains(body, `sk-demo-key-1234`) || contains(body, `sk-d***************************1234`) {
 		t.Fatalf("expected raw and variable-length masked keys to stay hidden, got %s", body)
 	}
 }
@@ -266,7 +284,7 @@ func TestUsageEventsResolvesAPIKeySourceFromProviderIdentity(t *testing.T) {
 		Source:    "sk-provider-key",
 		AuthIndex: "provider-auth-index",
 	}}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{items: []entities.UsageIdentity{{
+	router := newUsageEventsTestRouter(provider, usageIdentitiesStub{items: []entities.UsageIdentity{{
 		ID:            12,
 		Name:          "Provider Name",
 		Prefix:        "Team Prefix",
@@ -276,7 +294,7 @@ func TestUsageEventsResolvesAPIKeySourceFromProviderIdentity(t *testing.T) {
 		Type:          "openai",
 		Provider:      "Provider",
 		TotalRequests: 1,
-	}}}})
+	}}}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -310,7 +328,7 @@ func TestUsageEventsDoesNotResolveProviderIdentityFromSource(t *testing.T) {
 		Source:    "provider-auth-index",
 		AuthIndex: "missing-auth-index",
 	}}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{items: []entities.UsageIdentity{{
+	router := newUsageEventsTestRouter(provider, usageIdentitiesStub{items: []entities.UsageIdentity{{
 		ID:            12,
 		Name:          "Provider Name",
 		Prefix:        "Team Prefix",
@@ -320,7 +338,7 @@ func TestUsageEventsDoesNotResolveProviderIdentityFromSource(t *testing.T) {
 		Type:          "openai",
 		Provider:      "Provider",
 		TotalRequests: 1,
-	}}}})
+	}}}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -347,13 +365,13 @@ func TestUsageEventsMarksRowDeletedWhenAuthIndexHasNoIdentity(t *testing.T) {
 		Provider:  "Fallback Provider",
 		AuthIndex: "missing-auth-index",
 	}}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{items: []entities.UsageIdentity{{
+	router := newUsageEventsTestRouter(provider, usageIdentitiesStub{items: []entities.UsageIdentity{{
 		ID:           12,
 		Name:         "Provider Name",
 		AuthType:     entities.UsageIdentityAuthTypeAIProvider,
 		AuthTypeName: "apikey",
 		Identity:     "other-auth-index",
-	}}}})
+	}}}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -377,13 +395,13 @@ func TestUsageEventsDoesNotMarkRowDeletedWhenAuthIndexMatchesIdentity(t *testing
 		Provider:  "Fallback Provider",
 		AuthIndex: "provider-auth-index",
 	}}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{items: []entities.UsageIdentity{{
+	router := newUsageEventsTestRouter(provider, usageIdentitiesStub{items: []entities.UsageIdentity{{
 		ID:           12,
 		Name:         "Provider Name",
 		AuthType:     entities.UsageIdentityAuthTypeAIProvider,
 		AuthTypeName: "apikey",
 		Identity:     "provider-auth-index",
-	}}}})
+	}}}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -407,7 +425,7 @@ func TestUsageEventsKeepsFallbackSourceWhenAuthIndexIsMissing(t *testing.T) {
 		Provider:  "OpenAI Mirror",
 		Source:    "sk-provider-key",
 	}}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "")
+	router := newUsageEventsTestRouter(provider, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -424,7 +442,7 @@ func TestUsageEventsKeepsFallbackSourceWhenAuthIndexIsMissing(t *testing.T) {
 
 func TestUsageEventsPassesPaginationAndAuthIndexSourceFilter(t *testing.T) {
 	provider := &usageEventsStub{eventsPage: &servicedto.UsageEventsPage{Events: []servicedto.UsageEventRecord{}, TotalCount: 0, Page: 3, PageSize: 100, TotalPages: 0}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "")
+	router := newUsageEventsTestRouter(provider, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h&page=3&page_size=100&model=claude-sonnet&source=authidx-openai-main&result=failed", nil)
 	resp := httptest.NewRecorder()
 
@@ -447,7 +465,7 @@ func TestUsageEventsPassesPaginationAndAuthIndexSourceFilter(t *testing.T) {
 
 func TestUsageEventsPassesAuthFileIdentitySourceFilterAsAuthIndex(t *testing.T) {
 	provider := &usageEventsStub{eventsPage: &servicedto.UsageEventsPage{Events: []servicedto.UsageEventRecord{}, TotalCount: 0, Page: 1, PageSize: 100, TotalPages: 0}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "")
+	router := newUsageEventsTestRouter(provider, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h&source=auth-file-index", nil)
 	resp := httptest.NewRecorder()
 
@@ -468,7 +486,7 @@ func TestUsageEventsDoesNotReturnFilterOptions(t *testing.T) {
 		}},
 		TotalCount: 2, Page: 1, PageSize: 20, TotalPages: 1,
 	}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "")
+	router := newUsageEventsTestRouter(provider, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events?range=24h", nil)
 	resp := httptest.NewRecorder()
 
@@ -487,7 +505,7 @@ func TestUsageEventModelFilterOptionsReturnsStableModels(t *testing.T) {
 	provider := &usageEventsStub{eventFilterOptions: &servicedto.UsageEventFilterOptions{
 		Models: []string{"claude-sonnet", "gpt-5"},
 	}}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "")
+	router := newUsageEventsTestRouter(provider, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events/filters/models?range=24h&model=ignored&source=ignored&result=failed&page=3&page_size=20", nil)
 	resp := httptest.NewRecorder()
 
@@ -510,7 +528,7 @@ func TestUsageEventModelFilterOptionsReturnsStableModels(t *testing.T) {
 
 func TestUsageEventSourceFilterOptionsReturnsIdentitySources(t *testing.T) {
 	provider := &usageEventsStub{}
-	router := NewRouter(nil, nil, provider, nil, AuthConfig{}, nil, "", OptionalProviders{UsageIdentity: usageIdentitiesStub{items: []entities.UsageIdentity{{ID: 1, Name: "Claude Main", AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "apikey", Identity: "authidx-source-a", Type: "openai", Provider: "Provider A", TotalRequests: 3}, {ID: 2, Name: "Provider A", AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "apikey", Identity: "authidx-source-b", Type: "openai", Provider: "Provider A"}, {ID: 3, Name: "Auth User", AuthType: entities.UsageIdentityAuthTypeAuthFile, AuthTypeName: "oauth", Identity: "auth-1", Type: "claude", Provider: "Claude", TotalRequests: 2}, {ID: 4, Name: "Zero Request User", AuthType: entities.UsageIdentityAuthTypeAuthFile, AuthTypeName: "oauth", Identity: "auth-zero", Type: "claude", Provider: "Claude"}, {ID: 5, Name: "Zero Provider", AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "apikey", Identity: "authidx-source-zero", Type: "openai", Provider: "Zero Provider"}, {ID: 6, Name: "Deleted Source", AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "apikey", Identity: "authidx-deleted", Type: "openai", Provider: "Deleted Provider", TotalRequests: 5, IsDeleted: true}}}})
+	router := newUsageEventsTestRouter(provider, usageIdentitiesStub{items: []entities.UsageIdentity{{ID: 1, Name: "Claude Main", AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "apikey", Identity: "authidx-source-a", Type: "openai", Provider: "Provider A", TotalRequests: 3}, {ID: 2, Name: "Provider A", AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "apikey", Identity: "authidx-source-b", Type: "openai", Provider: "Provider A"}, {ID: 3, Name: "Auth User", AuthType: entities.UsageIdentityAuthTypeAuthFile, AuthTypeName: "oauth", Identity: "auth-1", Type: "claude", Provider: "Claude", TotalRequests: 2}, {ID: 4, Name: "Zero Request User", AuthType: entities.UsageIdentityAuthTypeAuthFile, AuthTypeName: "oauth", Identity: "auth-zero", Type: "claude", Provider: "Claude"}, {ID: 5, Name: "Zero Provider", AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "apikey", Identity: "authidx-source-zero", Type: "openai", Provider: "Zero Provider"}, {ID: 6, Name: "Deleted Source", AuthType: entities.UsageIdentityAuthTypeAIProvider, AuthTypeName: "apikey", Identity: "authidx-deleted", Type: "openai", Provider: "Deleted Provider", TotalRequests: 5, IsDeleted: true}}}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/usage/events/filters/sources?range=24h&model=ignored&source=ignored&result=failed&page=3&page_size=20", nil)
 	resp := httptest.NewRecorder()
 

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/repository/dto"
-	"cpa-usage-keeper/internal/timeutil"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/repository/dto"
+	"llmapi-dashboard/internal/timeutil"
 
 	"gorm.io/gorm"
 )
@@ -26,7 +26,7 @@ func ReplaceUsageIdentitiesForAuthType(ctx context.Context, db *gorm.DB, identit
 		if err != nil {
 			return fmt.Errorf("list usage identities for sync: %w", err)
 		}
-		// 先写入或恢复本次同步到的身份，确保 CPA 返回的 deleted row 会重新变为 active。
+		// 先写入或恢复本次输入的身份，确保 输入中的 deleted row 会重新变为 active。
 		if err := syncUsageIdentities(tx, normalized, existingRows); err != nil {
 			return err
 		}
@@ -50,7 +50,7 @@ func ReplaceUsageIdentitiesForProviderTypes(ctx context.Context, db *gorm.DB, id
 		if err != nil {
 			return fmt.Errorf("list provider usage identities for sync: %w", err)
 		}
-		// 先同步本次成功拉到的 provider identity，CPA 返回的历史 deleted provider 会在这里恢复 active。
+		// 先写入本次输入的 provider identity，历史 deleted provider 会在这里恢复 active。
 		if err := syncUsageIdentities(tx, normalized, existingRows); err != nil {
 			return err
 		}
@@ -464,7 +464,7 @@ func listUsageIdentitySyncRows(query *gorm.DB) ([]usageIdentitySyncRow, error) {
 }
 
 func markStaleUsageIdentityRowsDeleted(tx *gorm.DB, rows []usageIdentitySyncRow, incomingIdentities []string, now time.Time, context string) error {
-	// 把本次同步到的 identity 放进内存集合，避免生成超大的 identity NOT IN SQL。
+	// 把本次输入的 identity 放进内存集合，避免生成超大的 identity NOT IN SQL。
 	incoming := make(map[string]struct{}, len(incomingIdentities))
 	for _, identity := range incomingIdentities {
 		incoming[identity] = struct{}{}

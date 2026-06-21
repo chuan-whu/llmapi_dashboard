@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	servicedto "cpa-usage-keeper/internal/service/dto"
-	"cpa-usage-keeper/internal/timeutil"
+	servicedto "llmapi-dashboard/internal/service/dto"
+	"llmapi-dashboard/internal/timeutil"
 )
 
 var presetUsageRangeDurations = map[string]time.Duration{

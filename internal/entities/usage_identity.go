@@ -10,7 +10,7 @@ const (
 	UsageIdentityAuthTypeAIProvider UsageIdentityAuthType = 2
 )
 
-// UsageIdentity 是从 CPA auth_files 和 provider config 同步出的 usage source 身份实体。
+// UsageIdentity 是请求来源身份实体，当前看板主要展示 AI Provider 类型。
 type UsageIdentity struct {
 	ID           int64                 `gorm:"primaryKey;index:idx_usage_identities_auth_type_name_id,priority:3"`
 	Name         string                `gorm:"index:idx_usage_identities_auth_type_name_id,priority:2"`

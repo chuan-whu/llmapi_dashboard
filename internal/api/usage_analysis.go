@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"time"
 
-	"cpa-usage-keeper/internal/helper"
-	"cpa-usage-keeper/internal/service"
-	servicedto "cpa-usage-keeper/internal/service/dto"
-	"cpa-usage-keeper/internal/timeutil"
 	"github.com/gin-gonic/gin"
+	"llmapi-dashboard/internal/helper"
+	"llmapi-dashboard/internal/service"
+	servicedto "llmapi-dashboard/internal/service/dto"
+	"llmapi-dashboard/internal/timeutil"
 )
 
 type analysisResponse struct {
@@ -72,7 +72,7 @@ type analysisAPIKeyInfo struct {
 	Label string
 }
 
-func registerUsageAnalysisRoute(router gin.IRoutes, usageProvider service.UsageProvider, cpaAPIKeyProvider service.CPAAPIKeyProvider) {
+func registerUsageAnalysisRoute(router gin.IRoutes, usageProvider service.UsageProvider, apiKeyProvider service.APIKeyProvider) {
 	router.GET("/usage/analysis", func(c *gin.Context) {
 		if usageProvider == nil {
 			c.JSON(http.StatusOK, emptyAnalysisResponse())
@@ -90,7 +90,7 @@ func registerUsageAnalysisRoute(router gin.IRoutes, usageProvider service.UsageP
 			writeInternalError(c, "get analysis failed", err)
 			return
 		}
-		apiKeyInfos, err := loadCPAAPIKeyInfos(c, cpaAPIKeyProvider)
+		apiKeyInfos, err := loadAPIKeyInfos(c, apiKeyProvider)
 		if err != nil {
 			return
 		}
@@ -113,18 +113,18 @@ func emptyAnalysisResponse() analysisResponse {
 	}
 }
 
-func loadCPAAPIKeyInfos(c *gin.Context, provider service.CPAAPIKeyProvider) (map[string]analysisAPIKeyInfo, error) {
+func loadAPIKeyInfos(c *gin.Context, provider service.APIKeyProvider) (map[string]analysisAPIKeyInfo, error) {
 	if provider == nil {
 		return map[string]analysisAPIKeyInfo{}, nil
 	}
-	rows, err := provider.ListCPAAPIKeys(c.Request.Context())
+	rows, err := provider.ListAPIKeys(c.Request.Context())
 	if err != nil {
 		writeInternalError(c, "list api key options failed", err)
 		return nil, err
 	}
 	infos := make(map[string]analysisAPIKeyInfo, len(rows))
 	for _, row := range rows {
-		infos[row.APIKey] = analysisAPIKeyInfo{ID: row.ID, Label: helper.CPAAPIKeyMaskedDisplayKey(row)}
+		infos[row.APIKey] = analysisAPIKeyInfo{ID: row.ID, Label: helper.APIKeyMaskedDisplayKey(row)}
 	}
 	return infos, nil
 }

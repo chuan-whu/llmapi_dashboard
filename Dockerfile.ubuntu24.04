@@ -38,8 +38,8 @@ COPY web/static.go ./web/static.go
 COPY --from=web-builder /src/web/dist ./web/dist
 RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath \
-      -ldflags="-s -w -X cpa-usage-keeper/internal/version.Version=${VERSION}" \
-      -o "/out/cpa-usage-keeper-${TARGETOS}-${TARGETARCH}" \
+      -ldflags="-s -w -X llmapi-dashboard/internal/version.Version=${VERSION}" \
+      -o "/out/llmapi-dashboard-${TARGETOS}-${TARGETARCH}" \
       ./cmd/server
 
 FROM scratch AS artifact

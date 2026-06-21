@@ -10,10 +10,9 @@ import (
 	"testing/fstest"
 	"time"
 
-	"cpa-usage-keeper/internal/auth"
-	"cpa-usage-keeper/internal/poller"
-	"cpa-usage-keeper/internal/version"
 	"github.com/gin-gonic/gin"
+	"llmapi-dashboard/internal/auth"
+	"llmapi-dashboard/internal/version"
 )
 
 func testStaticFS(t *testing.T, files map[string]string) fs.FS {
@@ -25,24 +24,8 @@ func testStaticFS(t *testing.T, files map[string]string) fs.FS {
 	return staticFS
 }
 
-type statusStub struct {
-	status poller.Status
-}
-
-func (s statusStub) Status() poller.Status {
-	return s.status
-}
-
-type activeStatusRecorderStub struct {
-	calls int
-}
-
-func (s *activeStatusRecorderStub) RecordActiveStatus(time.Time) {
-	s.calls++
-}
-
 func TestHealthzReturnsOK(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "")
+	router := NewReadOnlyRouter(nil, nil, nil, nil, AuthConfig{}, nil, "")
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	resp := httptest.NewRecorder()
 
@@ -54,7 +37,7 @@ func TestHealthzReturnsOK(t *testing.T) {
 }
 
 func TestRouterDoesNotTrustForwardedClientIPByDefault(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "")
+	router := NewReadOnlyRouter(nil, nil, nil, nil, AuthConfig{}, nil, "")
 	router.GET("/client-ip", func(c *gin.Context) {
 		c.String(http.StatusOK, c.ClientIP())
 	})
@@ -70,7 +53,7 @@ func TestRouterDoesNotTrustForwardedClientIPByDefault(t *testing.T) {
 	}
 }
 
-func TestStatusReturnsPollerState(t *testing.T) {
+func TestReadOnlyStatusReturnsLocalState(t *testing.T) {
 	previousLocal := time.Local
 	location, err := time.LoadLocation("Asia/Shanghai")
 	if err != nil {
@@ -79,71 +62,11 @@ func TestStatusReturnsPollerState(t *testing.T) {
 	t.Cleanup(func() { time.Local = previousLocal })
 	time.Local = location
 
-	lastRunAt := time.Date(2026, 4, 16, 12, 0, 0, 0, time.UTC)
-	router := NewRouter(nil, statusStub{status: poller.Status{
-		Running:     true,
-		SyncRunning: false,
-		LastRunAt:   lastRunAt,
-		LastError:   "boom",
-		LastWarning: "metadata unavailable",
-		LastStatus:  "completed_with_warnings",
-	}}, nil, nil, AuthConfig{}, nil, "")
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.Code)
-	}
-	body := resp.Body.String()
-	if !(contains(body, `"running":true`) && contains(body, `"sync_running":false`) && contains(body, `"last_error":"boom"`) && contains(body, `"last_warning":"metadata unavailable"`) && contains(body, `"last_status":"completed_with_warnings"`) && contains(body, `"last_run_at":"2026-04-16T20:00:00+08:00"`)) {
-		t.Fatalf("unexpected response body: %s", body)
-	}
-}
-
-func TestStatusReturnsProjectTimezone(t *testing.T) {
-	previousLocal := time.Local
-	location, err := time.LoadLocation("Asia/Shanghai")
-	if err != nil {
-		t.Fatalf("load location: %v", err)
-	}
-	t.Cleanup(func() { time.Local = previousLocal })
-	time.Local = location
-
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "")
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.Code)
-	}
-	if body := resp.Body.String(); !contains(body, `"timezone":"Asia/Shanghai"`) {
-		t.Fatalf("expected status response to include project timezone, got %s", body)
-	}
-}
-
-func TestStatusReturnsEmptyStateWithoutProvider(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "")
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.Code)
-	}
-	if body := resp.Body.String(); !contains(body, `"running":false`) || !contains(body, `"sync_running":false`) || !contains(body, `"timezone":`) {
-		t.Fatalf("unexpected response body: %s", body)
-	}
-}
-
-func TestStatusReturnsVersionAndUpdateCheckFlag(t *testing.T) {
 	previousVersion := version.Version
 	t.Cleanup(func() { version.Version = previousVersion })
 	version.Version = "v1.2.3"
 
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "")
+	router := NewReadOnlyRouter(nil, nil, nil, nil, AuthConfig{}, nil, "")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -152,109 +75,33 @@ func TestStatusReturnsVersionAndUpdateCheckFlag(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", resp.Code)
 	}
 	body := resp.Body.String()
-	if !contains(body, `"version":"v1.2.3"`) || !contains(body, `"updateCheckEnabled":true`) {
-		t.Fatalf("unexpected response body: %s", body)
+	for _, expected := range []string{
+		`"timezone":"Asia/Shanghai"`,
+		`"version":"v1.2.3"`,
+	} {
+		if !contains(body, expected) {
+			t.Fatalf("expected status response to contain %s, got %s", expected, body)
+		}
 	}
-}
-
-func TestStatusReturnsCPAPublicURL(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{
-		Status: StatusRouteConfig{CPAPublicURL: "https://cpa.public.example.com/"},
-	})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.Code)
-	}
-	body := resp.Body.String()
-	if !contains(body, `"cpa_public_url":"https://cpa.public.example.com/"`) {
-		t.Fatalf("expected CPA public URL in status response, got %s", body)
-	}
-	if contains(body, "cpa_management_url") {
-		t.Fatalf("expected status response to use cpa_public_url instead of cpa_management_url, got %s", body)
-	}
-}
-
-func TestStatusOmitsCPAPublicURLWhenUnset(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{
-		Status: StatusRouteConfig{},
-	})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.Code)
-	}
-	if body := resp.Body.String(); contains(body, "cpa_public_url") || contains(body, "cpa_management_url") {
-		t.Fatalf("expected status response to omit CPA browser URL fields when unset, got %s", body)
-	}
-}
-
-func TestStatusActiveRecordsBackendActivity(t *testing.T) {
-	recorder := &activeStatusRecorderStub{}
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "", OptionalProviders{
-		Status: StatusRouteConfig{ActiveRecorder: recorder},
-	})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/status/active", nil)
-	resp := httptest.NewRecorder()
-
-	router.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusNoContent {
-		t.Fatalf("expected status 204, got %d body=%s", resp.Code, resp.Body.String())
-	}
-	if recorder.calls != 1 {
-		t.Fatalf("expected active recorder to be called once, got %d", recorder.calls)
-	}
-}
-
-func TestStatusHidesUpdateCheckForDevVersion(t *testing.T) {
-	previousVersion := version.Version
-	t.Cleanup(func() { version.Version = previousVersion })
-	version.Version = "dev"
-
-	router := NewRouter(nil, nil, nil, nil, AuthConfig{}, nil, "")
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.Code)
-	}
-	body := resp.Body.String()
-	if !contains(body, `"version":"dev"`) || !contains(body, `"updateCheckEnabled":false`) {
-		t.Fatalf("unexpected response body: %s", body)
-	}
-}
-
-func TestManualSyncRouteIsNotRegistered(t *testing.T) {
-	router := NewRouter(nil, statusStub{}, nil, nil, AuthConfig{}, nil, "")
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/sync", nil)
-	resp := httptest.NewRecorder()
-
-	router.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusNotFound {
-		t.Fatalf("expected status 404, got %d", resp.Code)
+	for _, forbidden := range []string{
+		"public_url",
+		"running",
+	} {
+		if contains(body, forbidden) {
+			t.Fatalf("expected read-only status response not to include %q, got %s", forbidden, body)
+		}
 	}
 }
 
 func TestSubpathRoutesOnlyServePrefixedEndpoints(t *testing.T) {
-	lastRunAt := time.Date(2026, 4, 16, 12, 0, 0, 0, time.UTC)
-	router := NewRouter(nil, statusStub{status: poller.Status{
-		Running:   true,
-		LastRunAt: lastRunAt,
-	}}, nil, nil, AuthConfig{BasePath: "/cpa"}, nil, "/cpa")
+	router := NewReadOnlyRouter(nil, nil, nil, nil, AuthConfig{BasePath: "/usage"}, nil, "/usage")
 
 	for _, testCase := range []struct {
 		path       string
 		statusCode int
 	}{
-		{path: "/cpa/healthz", statusCode: http.StatusOK},
-		{path: "/cpa/api/v1/status", statusCode: http.StatusOK},
+		{path: "/usage/healthz", statusCode: http.StatusOK},
+		{path: "/usage/api/v1/status", statusCode: http.StatusOK},
 		{path: "/healthz", statusCode: http.StatusNotFound},
 		{path: "/api/v1/status", statusCode: http.StatusNotFound},
 	} {
@@ -273,22 +120,24 @@ func TestSubpathStaticRoutesServeOnlyUnderPrefix(t *testing.T) {
 		"assets/app.js": "console.log('ok')",
 	})
 
-	router := NewRouter(staticFS, nil, nil, nil, AuthConfig{BasePath: "/cpa"}, nil, "/cpa", OptionalProviders{
-		TutorialPDFPath: filepath.Join(t.TempDir(), "guidance.pdf"),
-	})
+	pdfPath := filepath.Join(t.TempDir(), "guidance.pdf")
+	if err := os.WriteFile(pdfPath, []byte("%PDF-1.7\n%%EOF\n"), 0o600); err != nil {
+		t.Fatalf("write pdf: %v", err)
+	}
+	router := NewReadOnlyRouter(staticFS, nil, nil, nil, AuthConfig{BasePath: "/usage"}, nil, "/usage", TutorialPDFConfig{Path: pdfPath})
 
 	for _, testCase := range []struct {
 		path       string
 		statusCode int
 		contains   string
 	}{
-		{path: "/cpa/", statusCode: http.StatusOK, contains: `window.__TUTORIAL_PDF_URL__ = "/cpa/api/v1/tutorial.pdf";`},
-		{path: "/cpa/dashboard", statusCode: http.StatusOK, contains: `window.__APP_BASE_PATH__ = "/cpa";`},
-		{path: "/cpa/assets/app.js", statusCode: http.StatusOK, contains: "console.log('ok')"},
-		{path: "/cpa/missing.html", statusCode: http.StatusOK, contains: `window.__APP_BASE_PATH__ = "/cpa";`},
+		{path: "/usage/", statusCode: http.StatusOK, contains: `window.__TUTORIAL_PDF_URL__ = "/usage/api/v1/tutorial.pdf?v=`},
+		{path: "/usage/dashboard", statusCode: http.StatusOK, contains: `window.__APP_BASE_PATH__ = "/usage";`},
+		{path: "/usage/assets/app.js", statusCode: http.StatusOK, contains: "console.log('ok')"},
+		{path: "/usage/missing.html", statusCode: http.StatusOK, contains: `window.__APP_BASE_PATH__ = "/usage";`},
 		{path: "/foo", statusCode: http.StatusNotFound},
 		{path: "/assets/app.js", statusCode: http.StatusNotFound},
-		{path: "/cpa/api/unknown", statusCode: http.StatusNotFound},
+		{path: "/usage/api/unknown", statusCode: http.StatusNotFound},
 	} {
 		resp := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, testCase.path, nil)
@@ -303,7 +152,7 @@ func TestSubpathStaticRoutesServeOnlyUnderPrefix(t *testing.T) {
 }
 
 func TestCleanURLPathUsesSlashSemantics(t *testing.T) {
-	if cleaned := cleanURLPath("/cpa//dashboard/../assets/app.js"); cleaned != "/cpa/assets/app.js" {
+	if cleaned := cleanURLPath("/usage//dashboard/../assets/app.js"); cleaned != "/usage/assets/app.js" {
 		t.Fatalf("expected slash-normalized URL path, got %q", cleaned)
 	}
 }
@@ -319,7 +168,7 @@ func TestRootStaticRouteInjectsEmptyBasePath(t *testing.T) {
 		"index.html": `<html><head><script>window.__APP_BASE_PATH__ = "__APP_BASE_PATH__"; window.__TUTORIAL_PDF_URL__ = "__TUTORIAL_PDF_URL__";</script></head><body>app</body></html>`,
 	})
 
-	router := NewRouter(staticFS, nil, nil, nil, AuthConfig{}, nil, "")
+	router := NewReadOnlyRouter(staticFS, nil, nil, nil, AuthConfig{}, nil, "")
 	resp := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	router.ServeHTTP(resp, req)
@@ -430,9 +279,9 @@ func TestStaticHTMLResponsesBypassCache(t *testing.T) {
 		"assets/app.js": "console.log('ok')",
 	})
 
-	router := NewRouter(staticFS, nil, nil, nil, AuthConfig{}, nil, "/cpa")
+	router := NewReadOnlyRouter(staticFS, nil, nil, nil, AuthConfig{}, nil, "/usage")
 	resp := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/cpa/dashboard", nil)
+	req := httptest.NewRequest(http.MethodGet, "/usage/dashboard", nil)
 	router.ServeHTTP(resp, req)
 
 	if got := resp.Header().Get("Cache-Control"); got != "no-store" {
@@ -446,9 +295,9 @@ func TestStaticAssetResponsesUseLongCache(t *testing.T) {
 		"assets/app.js": "console.log('ok')",
 	})
 
-	router := NewRouter(staticFS, nil, nil, nil, AuthConfig{}, nil, "/cpa")
+	router := NewReadOnlyRouter(staticFS, nil, nil, nil, AuthConfig{}, nil, "/usage")
 	resp := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/cpa/assets/app.js", nil)
+	req := httptest.NewRequest(http.MethodGet, "/usage/assets/app.js", nil)
 	router.ServeHTTP(resp, req)
 
 	if got := resp.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {

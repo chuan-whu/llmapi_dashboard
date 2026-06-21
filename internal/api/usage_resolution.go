@@ -1,9 +1,9 @@
 package api
 
 import (
-	"cpa-usage-keeper/internal/entities"
-	"cpa-usage-keeper/internal/service"
 	"github.com/gin-gonic/gin"
+	"llmapi-dashboard/internal/entities"
+	"llmapi-dashboard/internal/service"
 )
 
 // loadUsageResolutionData 为 Request Events 和 Credentials 加载 source 解析所需的活跃 usage identities。
