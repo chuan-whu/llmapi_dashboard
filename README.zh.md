@@ -171,7 +171,29 @@ sudo systemctl restart cpa-usage-keeper
 
 `OHMYGPT_QUERY_URL` 或 `OHMYGPT_QUERY_TOKEN` 任一留空时会禁用 Oh My GPT 额度查询。浏览器只会把待查询 API Key 发给本应用，配置的 Bearer token 只在服务端使用。
 
-`DAILY_QUOTA_QUERY_COMMAND` 会在服务端按 shell 语义执行。加载 `.env` 文件时，相对命令会以 `.env` 所在目录作为工作目录。stdout 必须是类似 `{"status":"ok","daily_refresh":{"status":"ok","remaining":12.34},"pay_as_you_go":{"status":"ok","remaining":56.78}}` 的 JSON。每个余额状态可以是 `ok`、`partial` 或 `failed`；`ok` 和 `partial` 必须提供数字形式的 `remaining`。结果会保留两位小数，并按 `DAILY_QUOTA_CACHE_TTL` 缓存在内存中；命令错误、JSON 非法、缺少余额对象或余额非数字时，对应顶部余额框显示“查询失败”。
+`DAILY_QUOTA_QUERY_COMMAND` 会在服务端按 shell 语义执行。加载 `.env` 文件时，相对命令会以 `.env` 所在目录作为工作目录。先把 `query_amount.example.py` 复制成已忽略的私有文件 `query_amount.py`，再把示例请求替换成你的真实余额接口，然后配置：
+
+```env
+DAILY_QUOTA_QUERY_COMMAND=uv run query_amount.py
+```
+
+命令 stdout 必须只包含一个 JSON 对象：
+
+```json
+{
+  "status": "ok",
+  "daily_refresh": {
+    "status": "ok",
+    "remaining": 12.34
+  },
+  "pay_as_you_go": {
+    "status": "ok",
+    "remaining": 56.78
+  }
+}
+```
+
+每个余额状态可以是 `ok`、`partial` 或 `failed`；`ok` 和 `partial` 必须提供数字形式的 `remaining`。结果会保留两位小数，并按 `DAILY_QUOTA_CACHE_TTL` 缓存在内存中；命令错误、JSON 非法、缺少余额对象、stdout 混入额外文本或余额非数字时，对应顶部余额框显示“查询失败”。
 
 ## Nginx 反代
 

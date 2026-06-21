@@ -171,7 +171,29 @@ Relative `TUTORIAL_PDF_PATH` values are resolved from the `.env` file directory.
 
 Leave either `OHMYGPT_QUERY_URL` or `OHMYGPT_QUERY_TOKEN` empty to disable Oh My GPT quota lookup. The browser only posts the API key to this app; the configured bearer token is used server-side.
 
-`DAILY_QUOTA_QUERY_COMMAND` runs server-side with shell semantics. Relative commands run from the `.env` file directory when a `.env` file is loaded. Stdout must be JSON shaped like `{"status":"ok","daily_refresh":{"status":"ok","remaining":12.34},"pay_as_you_go":{"status":"ok","remaining":56.78}}`. Each balance status may be `ok`, `partial`, or `failed`; `ok` and `partial` require a numeric `remaining`. Results are rounded to two decimals and cached in memory for `DAILY_QUOTA_CACHE_TTL`; command errors, invalid JSON, missing balance objects, or non-numeric balances show `Query failed` in the affected header balance boxes.
+`DAILY_QUOTA_QUERY_COMMAND` runs server-side with shell semantics. Relative commands run from the `.env` file directory when a `.env` file is loaded. Copy `query_amount.example.py` to the ignored private file `query_amount.py`, replace the mock requests with your real balance endpoints, then set:
+
+```env
+DAILY_QUOTA_QUERY_COMMAND=uv run query_amount.py
+```
+
+The command's stdout must contain exactly one JSON object:
+
+```json
+{
+  "status": "ok",
+  "daily_refresh": {
+    "status": "ok",
+    "remaining": 12.34
+  },
+  "pay_as_you_go": {
+    "status": "ok",
+    "remaining": 56.78
+  }
+}
+```
+
+Each balance status may be `ok`, `partial`, or `failed`; `ok` and `partial` require a numeric `remaining`. Results are rounded to two decimals and cached in memory for `DAILY_QUOTA_CACHE_TTL`; command errors, invalid JSON, missing balance objects, extra stdout text, or non-numeric balances show `Query failed` in the affected header balance boxes.
 
 ## Nginx Reverse Proxy
 
